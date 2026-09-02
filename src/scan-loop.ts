@@ -9,7 +9,12 @@ export interface ScanStatus {
 }
 
 export type ScanOutcome =
-  | { status: "success"; snapshot: CidrStateSnapshot; scannedAt: string }
+  | {
+      status: "success";
+      snapshot: CidrStateSnapshot;
+      scannedAt: string;
+      recovered: boolean;
+    }
   | { status: "failed"; error: string }
   | { status: "skipped" };
 
@@ -55,6 +60,7 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
       const snapshot = calculateCidrState(existing, result);
       upsertScanRecords(deps.db, snapshot.records);
 
+      const recovered = lastError !== null;
       lastSuccessfulScanAt = result.scannedAt;
       lastError = null;
       logger.log(
@@ -65,6 +71,7 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
         status: "success",
         snapshot,
         scannedAt: result.scannedAt,
+        recovered,
       };
       deps.onScanSettled?.(outcome);
       return outcome;

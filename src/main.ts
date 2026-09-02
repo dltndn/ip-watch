@@ -5,8 +5,10 @@ import type { Express } from "express";
 import { createApp } from "./app.js";
 import { ConfigError, loadConfig, type AppConfig } from "./config.js";
 import { openDatabase, type SqliteDatabase } from "./db.js";
+import { registerRoutes } from "./routes.js";
 import { createScanLoop, type ScanLoop } from "./scan-loop.js";
 import { createMockScanner, type Scanner } from "./scanner.js";
+import { createSseHub, scanOutcomeToEvent, type SseHub } from "./sse.js";
 
 export interface AppRuntime {
   config: AppConfig;
@@ -14,6 +16,7 @@ export interface AppRuntime {
   app: Express;
   scanner: Scanner;
   scanLoop: ScanLoop;
+  sse: SseHub;
 }
 
 export function createRuntime(
@@ -21,19 +24,31 @@ export function createRuntime(
 ): AppRuntime {
   const config = loadConfig(environment);
   const db = openDatabase(config.databasePath);
+  let sse: SseHub | undefined;
   try {
+    const sseHub = createSseHub();
+    sse = sseHub;
     const scanner = createScanner(config);
     const scanLoop = createScanLoop({
       scanner,
       db,
       cidr: config.targetCidr,
       intervalMs: config.scanIntervalMs,
+      onScanSettled: (outcome) => {
+        const event = scanOutcomeToEvent(outcome);
+        if (event) {
+          sseHub.broadcast(event);
+        }
+      },
     });
     const app = createApp(config);
+    registerRoutes(app, { config, db, scanLoop, sse });
     app.locals.db = db;
     app.locals.scanLoop = scanLoop;
-    return { config, db, app, scanner, scanLoop };
+    app.locals.sse = sse;
+    return { config, db, app, scanner, scanLoop, sse };
   } catch (error) {
+    sse?.close();
     closeDatabase(db);
     throw error;
   }
@@ -44,10 +59,12 @@ export function start(
 ): void {
   let db: SqliteDatabase | undefined;
   let scanLoop: ScanLoop | undefined;
+  let sse: SseHub | undefined;
   try {
     const runtime = createRuntime(environment);
     db = runtime.db;
     scanLoop = runtime.scanLoop;
+    sse = runtime.sse;
     const server = runtime.app.listen(
       runtime.config.port,
       runtime.config.bindAddress,
@@ -62,11 +79,13 @@ export function start(
     server.on("error", (error) => {
       console.error("HTTP server failed", error);
       scanLoop?.stop();
+      sse?.close();
       closeDatabase(db);
       process.exitCode = 1;
     });
   } catch (error) {
     scanLoop?.stop();
+    sse?.close();
     closeDatabase(db);
     if (error instanceof ConfigError) {
       console.error(error.message);
