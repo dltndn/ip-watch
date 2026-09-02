@@ -1,0 +1,33 @@
+services:
+  ip-watch:
+    build:
+      context: .
+      target: development
+    environment:
+      NODE_ENV: development
+      BIND_ADDRESS: 0.0.0.0
+      PORT: 3000
+      DATABASE_PATH: /app/data/ip-watch.sqlite3
+      TARGET_CIDR: ${TARGET_CIDR:-192.168.1.0/24}
+      SCAN_INTERVAL_MS: ${SCAN_INTERVAL_MS:-10000}
+      SCAN_TIMEOUT_MS: ${SCAN_TIMEOUT_MS:-10000}
+      PING_TIMEOUT_MS: ${PING_TIMEOUT_MS:-1000}
+      PING_CONCURRENCY: ${PING_CONCURRENCY:-20}
+      USE_MOCK_SCANNER: "true"
+    ports:
+      - "127.0.0.1:${IP_WATCH_PORT:-3000}:3000"
+    volumes:
+      - ip-watch-dev-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  ip-watch-dev-data:

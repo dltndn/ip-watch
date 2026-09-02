@@ -1,0 +1,18 @@
+services:
+  ip-watch:
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - path: .env
+        required: false
+    network_mode: host
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    volumes:
+      - ip-watch-data:/app/data
+
+volumes:
+  ip-watch-data:
