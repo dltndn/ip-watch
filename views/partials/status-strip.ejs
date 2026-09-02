@@ -1,0 +1,36 @@
+<header class="status-strip" aria-label="스캔 상태">
+  <div class="status-strip__row">
+    <div class="status-strip__facts">
+      <div class="meta">
+        <span class="meta__label">대상 CIDR</span>
+        <span class="meta__value meta__value--mono"><%= cidr %></span>
+      </div>
+      <div class="meta">
+        <span class="meta__label">인터페이스</span>
+        <span class="meta__value meta__value--mono">
+          <% if (typeof config !== "undefined" && config.networkInterface) { %>
+            <%= config.networkInterface %>
+          <% } else { %>
+            Mock
+          <% } %>
+        </span>
+      </div>
+      <div class="meta">
+        <span class="meta__label">마지막 정상 스캔</span>
+        <span class="meta__value meta__value--mono" id="last-scan" data-loading="true">—</span>
+      </div>
+    </div>
+    <div class="status-strip__actions">
+      <p class="connection" id="connection-status" role="status">연결 확인 중</p>
+      <span class="badge badge--idle" id="scan-badge" data-state="idle">
+        <span class="badge__pulse" aria-hidden="true"></span>
+        <span id="scan-badge-label">정상</span>
+      </span>
+      <button type="button" class="btn btn--primary" id="scan-now">지금 스캔</button>
+    </div>
+  </div>
+  <p class="scan-feedback" id="scan-feedback" hidden></p>
+  <div class="banner banner--danger" id="scan-error-banner" hidden role="alert">
+    <p id="scan-error-text"></p>
+  </div>
+</header>

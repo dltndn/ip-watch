@@ -1,0 +1,44 @@
+<section class="toolbar" aria-label="검색과 필터">
+  <label class="search">
+    <span class="search__icon" aria-hidden="true">⌕</span>
+    <span class="visually-hidden">IP, MAC, 메모 검색</span>
+    <input
+      type="search"
+      id="search"
+      class="search__input"
+      placeholder="IP · MAC · 메모"
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </label>
+
+  <div class="filters" role="group" aria-label="상태 필터">
+    <button type="button" class="chip is-selected" data-status-filter="all" aria-pressed="true">전체</button>
+    <button type="button" class="chip" data-status-filter="ACTIVE" aria-pressed="false">
+      <span aria-hidden="true">●</span> 사용 중
+    </button>
+    <button type="button" class="chip" data-status-filter="INACTIVE" aria-pressed="false">
+      <span aria-hidden="true">◐</span> 과거 사용
+    </button>
+    <button type="button" class="chip" data-status-filter="AVAILABLE" aria-pressed="false">
+      <span aria-hidden="true">○</span> 미사용 추정
+    </button>
+    <button type="button" class="chip chip--accent" data-status-filter="candidate" aria-pressed="false">
+      <span aria-hidden="true">◆</span> 할당 후보
+    </button>
+  </div>
+
+  <div class="filters" role="group" aria-label="예약 필터">
+    <button type="button" class="chip is-selected" data-reservation-filter="all" aria-pressed="true">전체</button>
+    <button type="button" class="chip" data-reservation-filter="reserved" aria-pressed="false">예약만</button>
+    <button type="button" class="chip" data-reservation-filter="unreserved" aria-pressed="false">미예약</button>
+  </div>
+
+  <ul class="legend" aria-label="상태 범례">
+    <li><span class="legend__glyph legend__glyph--active" aria-hidden="true">●</span> 사용 중</li>
+    <li><span class="legend__glyph legend__glyph--inactive" aria-hidden="true">◐</span> 과거 사용</li>
+    <li><span class="legend__glyph legend__glyph--available" aria-hidden="true">○</span> 미사용 추정</li>
+    <li><span class="legend__glyph legend__glyph--reserved" aria-hidden="true">🔒</span> 예약</li>
+    <li><span class="legend__glyph legend__glyph--candidate" aria-hidden="true">◆</span> 할당 후보</li>
+  </ul>
+</section>

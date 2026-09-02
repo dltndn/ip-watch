@@ -4,21 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>IP Watch</title>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <h1>IP Watch</h1>
-    <p>대상 CIDR: <%= cidr %></p>
-    <p>
-      마지막 정상 스캔:
-      <%= lastSuccessfulScanAt ? lastSuccessfulScanAt : "없음" %>
-    </p>
-    <ul>
-      <li>전체: <%= summary.total %></li>
-      <li>사용 중: <%= summary.active %></li>
-      <li>과거 사용: <%= summary.inactive %></li>
-      <li>미사용 추정: <%= summary.available %></li>
-      <li>예약: <%= summary.reserved %></li>
-      <li>할당 후보: <%= summary.allocationCandidates %></li>
-    </ul>
+    <a class="skip-link" href="#ip-grid">IP 그리드로 건너뛰기</a>
+    <div class="app">
+      <%- include("partials/status-strip") %>
+      <%- include("partials/stats") %>
+      <%- include("partials/toolbar") %>
+      <div class="workspace">
+        <%- include("partials/grid") %>
+        <%- include("partials/drawer") %>
+      </div>
+    </div>
+    <script src="/app.js" defer></script>
   </body>
 </html>

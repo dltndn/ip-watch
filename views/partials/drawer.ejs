@@ -1,0 +1,55 @@
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+<aside
+  class="drawer"
+  id="drawer"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="drawer-ip"
+  hidden
+>
+  <header class="drawer__header">
+    <div>
+      <p class="micro-label">IP 주소</p>
+      <h2 class="drawer__ip" id="drawer-ip">—</h2>
+    </div>
+    <button type="button" class="btn btn--ghost" id="drawer-close" aria-label="상세 닫기">닫기</button>
+  </header>
+
+  <div class="drawer__pills">
+    <span class="pill" id="drawer-status"><span aria-hidden="true">○</span> 미사용 추정</span>
+    <span class="pill pill--reserved" id="drawer-reserved" hidden>🔒 예약</span>
+  </div>
+
+  <dl class="fields">
+    <div class="field">
+      <dt>MAC 주소</dt>
+      <dd class="mono" id="drawer-mac">—</dd>
+    </div>
+    <div class="field">
+      <dt>최초 발견</dt>
+      <dd class="mono" id="drawer-first-seen">—</dd>
+    </div>
+    <div class="field">
+      <dt>마지막 사용 확인</dt>
+      <dd class="mono" id="drawer-last-seen">—</dd>
+    </div>
+    <div class="field">
+      <dt>마지막 검사</dt>
+      <dd class="mono" id="drawer-last-checked">—</dd>
+    </div>
+  </dl>
+
+  <div class="warning" id="drawer-available-warning" hidden>
+    이 상태는 실제 미사용을 보장하지 않습니다. 고정 IP를 할당하기 전에 최종 확인이 필요합니다.
+  </div>
+
+  <label class="note-label" for="drawer-note">작업 메모</label>
+  <textarea id="drawer-note" class="note" maxlength="1000" rows="5" spellcheck="true"></textarea>
+  <p class="note-count"><span id="note-count">0</span>/1000</p>
+  <p class="inline-error" id="drawer-error" hidden></p>
+
+  <div class="drawer__actions">
+    <button type="button" class="btn" id="toggle-reserved">예약</button>
+    <button type="button" class="btn btn--primary" id="save-note">메모 저장</button>
+  </div>
+</aside>
