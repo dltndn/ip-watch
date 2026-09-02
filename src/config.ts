@@ -1,6 +1,8 @@
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
 
+import { CidrError, MAX_USABLE_HOSTS, countUsableHosts } from "./state.js";
+
 const DEFAULTS = {
   NODE_ENV: "development",
   BIND_ADDRESS: "0.0.0.0",
@@ -14,7 +16,7 @@ const DEFAULTS = {
 } as const;
 
 const MAX_TIMER_MS = 2_147_483_647;
-const MAX_TARGET_HOSTS = 254;
+const MAX_TARGET_HOSTS = MAX_USABLE_HOSTS;
 
 export type NodeEnvironment = "development" | "test" | "production";
 
@@ -146,33 +148,29 @@ function parseBoolean(name: string, value: string): boolean {
 }
 
 function validateTargetCidr(value: string): number {
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d|[12]\d|3[0-2])$/.exec(
-    value,
-  );
-  if (!match) {
-    throw new ConfigError("TARGET_CIDR must be an IPv4 CIDR such as 192.168.1.0/24");
+  try {
+    return countUsableHosts(value);
+  } catch (error) {
+    if (error instanceof CidrError) {
+      throw new ConfigError(configMessageForCidrError(error));
+    }
+    throw error;
   }
+}
 
-  const octets = match.slice(1, 5);
-  if (
-    octets.some((octet) => {
-      const parsed = Number(octet);
-      return parsed > 255 || String(parsed) !== octet;
-    })
-  ) {
-    throw new ConfigError("TARGET_CIDR contains an invalid IPv4 address");
+function configMessageForCidrError(error: CidrError): string {
+  switch (error.code) {
+    case "INVALID_FORMAT":
+      return "TARGET_CIDR must be an IPv4 CIDR such as 192.168.1.0/24";
+    case "INVALID_ADDRESS":
+      return "TARGET_CIDR contains an invalid IPv4 address";
+    case "UNSUPPORTED_PREFIX":
+      return "TARGET_CIDR prefixes /31 and /32 are not supported";
+    case "TOO_MANY_HOSTS":
+      return `TARGET_CIDR supports at most ${MAX_TARGET_HOSTS} usable hosts; received ${error.usableHostCount}`;
+    default: {
+      const exhaustive: never = error.code;
+      return exhaustive;
+    }
   }
-
-  const prefixLength = Number(match[5]);
-  if (prefixLength >= 31) {
-    throw new ConfigError("TARGET_CIDR prefixes /31 and /32 are not supported");
-  }
-
-  const hostCount = 2 ** (32 - prefixLength) - 2;
-  if (hostCount > MAX_TARGET_HOSTS) {
-    throw new ConfigError(
-      `TARGET_CIDR supports at most ${MAX_TARGET_HOSTS} usable hosts; received ${hostCount}`,
-    );
-  }
-  return hostCount;
 }

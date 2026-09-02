@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "../src/config.js";
 
 describe("loadConfig", () => {
+  it("counts usable hosts for a non-network-aligned CIDR", () => {
+    const config = loadConfig({
+      TARGET_CIDR: "192.168.1.42/24",
+      USE_MOCK_SCANNER: "true",
+    });
+
+    expect(config.targetCidr).toBe("192.168.1.42/24");
+    expect(config.targetHostCount).toBe(254);
+  });
+
   it("loads the documented defaults for a mock scanner", () => {
     const config = loadConfig({
       TARGET_CIDR: "192.168.1.0/24",
