@@ -7,8 +7,8 @@
 | 문서 상태 | Draft |
 | 대상 버전 | v1 (MVP) |
 | 목적 | 스펙을 실제 구현·검증·배포 가능한 작업 단위로 전환 |
-| 개발 환경 | macOS + Mock Scanner |
-| 운영·실환경 검증 | Ubuntu Server LTS + 실제 `arp-scan`/`ping` |
+| 개발 환경 | macOS + Docker Desktop + `compose.dev.yaml` + Mock Scanner |
+| 운영·실환경 검증 | Ubuntu Server LTS + Docker Engine/Compose + 실제 `arp-scan`/`ping` |
 
 ## 1. 목표와 완료 모습
 
@@ -17,7 +17,7 @@
 MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 한다.
 
 ```text
-서비스 시작
+Docker Compose로 단일 컨테이너 시작
   → 저장된 마지막 상태를 대시보드에 표시
   → 시작 직후 및 주기적으로 네트워크 스캔
   → ARP/Ping 결과로 IP 상태 판정
@@ -28,20 +28,24 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
   → 변경 내용이 저장되고 다른 브라우저에도 반영
 ```
 
-핵심 완료 조건은 [테스트와 인수 조건](../spec/06-testing-and-acceptance.md)의 v1 인수 조건 15개를 모두 통과하는 것이다.
+핵심 완료 조건은 [테스트와 인수 조건](../spec/06-testing-and-acceptance.md)의 v1 인수 조건 18개를 모두 통과하는 것이다.
 
 ## 2. 구현 원칙과 범위 경계
 
 ### 구현 원칙
 
 - 하나의 Node.js 프로세스, 하나의 CIDR, 하나의 SQLite 파일을 기준으로 한다.
+- 개발과 운영의 공식 실행 경로는 Docker Compose로 통일하고, 호스트에 Node.js나 네트워크 스캔 도구를 직접 설치하지 않는다.
+- macOS 개발은 Docker Desktop의 bridge network와 Mock Scanner를, Ubuntu 운영은 Docker Engine의 host network와 실제 Scanner를 사용한다.
+- 애플리케이션·Node.js·`arp-scan`·`ping`은 하나의 이미지로 패키징하고 운영 컨테이너는 단일 인스턴스로 실행한다.
+- SQLite는 컨테이너 레이어가 아닌 Docker named volume에 저장한다.
 - EJS + Vanilla JavaScript + CSS로 구현하며 별도 프론트엔드 빌드 체인을 만들지 않는다.
 - `scanner`, `scan-loop`, `state`, `db`, `sse`, `routes`의 작은 모듈만 두고 서비스·Repository·이벤트 버스 계층은 추가하지 않는다.
 - 예약 여부는 탐지 상태와 분리하고, 할당 후보는 `AVAILABLE && !isReserved`로 계산한다.
 - 스캔 실패는 빈 결과가 아니다. 기존 DB 상태를 보존하고 메모리의 오류 상태와 로그만 갱신한다.
 - 외부 명령 실행과 DB 트랜잭션을 겹치지 않는다.
 - 자동화 테스트는 구현 세부보다 사용자에게 보이는 결과와 데이터 안전성을 검증한다.
-- Mock Scanner로 macOS 개발 흐름을 완성한 뒤 Ubuntu 실제 네트워크를 검증한다.
+- `compose.dev.yaml`과 Mock Scanner로 macOS 개발 흐름을 완성한 뒤 `compose.yaml`로 Ubuntu 실제 네트워크를 검증한다.
 
 ### 이번 MVP에 포함하지 않는 것
 
@@ -62,30 +66,40 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 
 ### 단계 0. 프로젝트 기반과 설정
 
-목표: 애플리케이션이 검증된 설정으로 시작하고 테스트를 실행할 수 있는 최소 골격을 만든다.
+목표: 애플리케이션이 재현 가능한 컨테이너 이미지와 검증된 Compose 설정으로 시작하고 테스트를 실행할 수 있는 최소 골격을 만든다.
 
 작업:
 
-- Node.js LTS 메이저 버전을 결정하고 `package.json`의 `engines`에 고정한다.
+- Node.js LTS 메이저 버전을 결정하고 `package.json`의 `engines`와 공식 Debian 기반 Docker 이미지 태그에 동일하게 고정한다.
 - TypeScript, Express 5, EJS, `better-sqlite3`, Vitest, Supertest를 구성한다.
+- `package-lock.json`을 커밋하고 이미지 빌드에서는 `npm ci`를 사용해 의존성 설치 결과를 고정한다.
 - `src/`, `views/`, `public/`, `tests/`, `data/` 기본 구조와 개발·빌드·테스트·시작 스크립트를 만든다.
+- multi-stage `Dockerfile`을 추가해 build stage에서 의존성 설치와 TypeScript 컴파일을 수행하고, runtime stage에는 production 의존성·빌드 결과·EJS view·정적 파일·DB 초기화 파일만 포함한다.
+- runtime 이미지에 `arp-scan`, `iputils-ping`, `libcap2-bin`을 설치하고 `/app/data`를 애플리케이션 전용 비-root 사용자가 쓸 수 있게 준비한다.
+- `.dockerignore`에서 Git 데이터, 의존성, 빌드 결과, 로컬 DB·데이터, `.env`, coverage를 제외한다.
+- `compose.dev.yaml`은 bridge network, `127.0.0.1` 포트 publish, `USE_MOCK_SCANNER=true`, 개발용 named volume로 구성한다.
+- `compose.yaml`은 Ubuntu host network, 단일 컨테이너, named volume을 기본 골격으로 구성하고 운영 권한·재시작 세부값은 단계 6에서 완성한다.
+- `.env.example`에 Docker 내부 bind 주소와 `/app/data/ip-watch.sqlite3`를 포함한 전체 설정 예시를 제공하고 실제 `.env`는 커밋하지 않는다.
 - `src/config.ts`에서 모든 환경 변수를 한 번에 읽고 검증한다.
 - IPv4 CIDR 형식, `/31`·`/32` 거부, 최대 254 호스트, 포트·시간·동시성의 양수 범위를 검증한다.
 - 필수 값이 없거나 잘못되면 HTTP 서버나 스캔 루프를 시작하기 전에 이해 가능한 오류로 종료한다.
-- 개발 기본값에서는 `USE_MOCK_SCANNER=true`로 실제 패킷 권한 없이 실행 가능하게 한다.
+- 개발 Compose에서는 `USE_MOCK_SCANNER=true`로 실제 패킷 권한 없이 실행 가능하게 한다.
 - 애플리케이션 생성과 리스닝을 분리해 HTTP 통합 테스트가 임의 포트에서 앱을 실행할 수 있게 한다.
 
 산출물:
 
-- `package.json`, `tsconfig.json`
+- `package.json`, `package-lock.json`, `tsconfig.json`, `.env.example`
+- `Dockerfile`, `.dockerignore`, `compose.yaml`, `compose.dev.yaml`
 - `src/config.ts`, `src/app.ts`
 - 기본 테스트 설정과 로컬 실행 안내
 
 완료 기준:
 
-- 정상 설정으로 개발 서버가 시작된다.
+- Docker image가 동일 입력에서 재현 가능하게 빌드된다.
+- 두 Compose 파일이 `docker compose config` 검증을 통과한다.
+- `docker compose -f compose.dev.yaml up --build`로 Mock Scanner 개발 서버가 시작되고 HTTP healthcheck를 통과한다.
 - 잘못된 CIDR, 호스트 수 초과, 필수 설정 누락을 각각 시작 전에 거부한다.
-- `npm test`와 TypeScript 검사가 실행 가능한 상태다.
+- 컨테이너 안에서 `npm test`와 TypeScript 검사가 실행 가능한 상태다.
 
 ### 단계 1. CIDR, 상태 판정, SQLite 기반
 
@@ -101,7 +115,8 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
   - 미응답 + 사용 이력 없음 → `AVAILABLE`
 - 최초/마지막 발견 시각, 마지막 검사 시각, MAC 보존·갱신 규칙을 구현한다.
 - 예약과 메모가 스캔 결과로 변경되지 않도록 한다.
-- `src/db.ts`에서 SQLite 파일과 `ip_records` 테이블을 초기화한다.
+- `src/db.ts`에서 `DATABASE_PATH`로 받은 SQLite 파일과 `ip_records` 테이블을 초기화하고, 운영 기본 경로는 named volume 내부의 `/app/data/ip-watch.sqlite3`로 둔다.
+- volume mount 또는 쓰기 권한이 잘못됐을 때 임시 경로로 우회하지 않고 시작을 실패시킨다.
 - `(cidr, ip_address)` 기본 키, 상태 CHECK, 예약 불리언, 메모 1,000자 제한을 적용한다.
 - 시작 시 WAL과 `busy_timeout=5000`을 적용한다.
 - CIDR별 전체 레코드 조회, 스캔 결과 일괄 upsert, IP 메모·예약 부분 변경 함수를 만든다.
@@ -122,7 +137,7 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 
 ### 단계 2. Mock Scanner 기반의 첫 수직 흐름
 
-목표: 실제 네트워크 명령 없이 `스캔 → 판정 → 저장 → 조회`를 끝까지 동작시킨다.
+목표: macOS 개발 Compose 안에서 실제 네트워크 명령 없이 `스캔 → 판정 → 저장 → 조회`를 끝까지 동작시킨다.
 
 작업:
 
@@ -145,6 +160,7 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 - 진행 중 수동/주기 요청은 두 번째 스캔을 시작하지 않는다.
 - Mock 연결·해제에 따라 `ACTIVE → INACTIVE`가 재현된다.
 - Mock 오류 전후로 기존 레코드 보존과 오류 복구가 검증된다.
+- 개발 컨테이너를 재생성해도 개발용 named volume의 SQLite 상태와 메모가 유지된다.
 
 ### 단계 3. HTTP API와 SSE
 
@@ -228,7 +244,8 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 - ARP 미응답 IP에만 제한된 동시성으로 Ping을 실행한다.
 - Ping timeout은 정상 미응답으로, 실행 파일 부재·권한·인터페이스·명령 timeout·파싱 오류는 전체 스캔 실패로 구분한다.
 - Ping-only 응답을 MAC이 없거나 이전 MAC을 유지한 `ACTIVE`로 처리한다.
-- 운영체제별 Ping 인자 차이는 Scanner 내부의 작은 어댑터로 제한하고 Ubuntu 동작을 기준으로 검증한다.
+- 런타임 Debian 이미지에 설치된 `arp-scan`과 `iputils-ping`의 출력을 기준으로 파서를 고정하고 Ubuntu Docker Engine에서 실제 동작을 검증한다.
+- host network가 아니거나 지정한 Ubuntu 호스트 인터페이스에 접근할 수 없는 경우를 전체 스캔 실패로 처리한다.
 - 명령 fixture 기반 파서 테스트와 실행기 오류 분류 테스트를 추가한다.
 
 산출물:
@@ -243,31 +260,40 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 - 실행 권한이나 도구 문제가 있어도 기존 상태가 유지되고 원인이 로그와 화면에 표시된다.
 - 최대 254개 호스트 Ping이 설정한 동시성과 timeout 범위에서 종료된다.
 
-### 단계 6. 보안·운영·배포 준비
+### 단계 6. Docker 보안·운영·배포 준비
 
-목표: 전용 Ubuntu 서버에서 최소 권한으로 재시작 가능한 서비스를 운영한다.
+목표: Ubuntu Docker Engine에서 단일 컨테이너를 최소 권한으로 실행하고, 컨테이너 교체와 호스트 재부팅에도 데이터와 서비스가 복구되게 한다.
 
 작업:
 
-- 프로덕션 빌드와 실행 절차, 필수 패키지, 환경 변수 예시를 문서화한다.
-- 전용 OS 사용자, 전용 데이터 디렉터리, SQLite 파일 권한을 정의한다.
-- 애플리케이션 전체를 root로 실행하지 않고 `arp-scan`에 필요한 `CAP_NET_RAW`만 부여한다.
-- systemd unit 예시를 제공해 부팅 자동 시작, 비정상 종료 재시작, journal 로그 확인을 지원한다.
-- 서비스 바인딩과 방화벽을 신뢰된 사내망으로 제한하도록 운영 체크리스트에 명시한다.
-- 필요하면 Nginx 또는 기존 사내 인증 프록시를 앞단에 두되 애플리케이션 인증 기능은 추가하지 않는다.
-- 메모 EJS escape, JSON 본문 크기 제한, 안전한 오류 메시지, SQLite 접근 권한을 점검한다.
-- 서버 재시작 시 DB의 마지막 상태를 먼저 표시하고 즉시 새 스캔이 시작되는지 확인한다.
+- runtime 이미지에서 `arp-scan` 실행 파일에 `cap_net_raw+p`를 설정하고 최종 Node.js 프로세스는 전용 비-root 사용자로 실행한다.
+- 운영 `compose.yaml`에 `network_mode: host`를 사용하고 `ports`는 선언하지 않는다. `NETWORK_INTERFACE`에는 Ubuntu 호스트의 실제 인터페이스 이름을 전달한다.
+- `privileged: true`를 금지하고 모든 capability를 제거한 뒤 `NET_RAW`만 추가한다.
+- Docker socket, 호스트 root 파일시스템, `/dev` 전체를 컨테이너에 mount하지 않는다.
+- `ip-watch-data` named volume을 `/app/data`에 mount하고 동일 volume을 둘 이상의 애플리케이션 컨테이너가 동시에 사용하지 않게 한다.
+- 컨테이너 교체·재생성 시 데이터 보존을 확인하고, 운영 중 `docker compose down -v`를 사용하지 않는 절차와 SQLite backup 방법을 문서화한다.
+- HTTP 응답 기반 container healthcheck, `restart: unless-stopped`, `stop_grace_period: 30s`를 설정하고 Docker Engine이 Ubuntu 부팅 시 시작되게 한다.
+- `SIGTERM`을 받으면 새 스캔 중단 → 진행 중 명령 취소 또는 timeout 대기 → SSE/HTTP 종료 → SQLite 연결 종료 순으로 정상 종료한다.
+- 설정 변경은 `docker compose restart`가 아니라 `docker compose up -d` 재생성으로 반영한다.
+- 시작·설정 오류·스캔 성공/실패·중복 실행 생략·정상 종료를 stdout/stderr에 기록하고 Docker logging driver로 조회한다.
+- 서비스와 호스트 방화벽을 신뢰된 사내망으로 제한하고, 필요하면 Nginx 또는 기존 사내 인증 프록시를 사용한다.
+- 메모 EJS escape, JSON 본문 크기 제한, 안전한 오류 메시지, SQLite volume 접근 권한을 점검한다.
+- 이미지 빌드·시작·상태·로그·설정 반영·중지와 named volume 백업/복구 명령을 운영 문서에 정리한다.
 
 산출물:
 
-- Ubuntu 설치·실행·장애 대응 문서
-- 환경 변수 예시와 systemd unit 예시
+- 완성된 운영 `compose.yaml`과 runtime image 보안 설정
+- Ubuntu Docker Engine/Compose 설치·실행·백업·장애 대응 문서
+- `.env.example`, healthcheck, 정상 종료 처리
 
 완료 기준:
 
-- 전용 사용자와 최소 권한으로 서비스가 시작된다.
-- 재부팅 및 비정상 종료 후 자동 복구된다.
-- journal에서 시작, 스캔 성공·실패, 중복 실행 생략 원인을 확인할 수 있다.
+- `docker compose -f compose.yaml up -d --build`로 단일 운영 컨테이너가 기동된다.
+- 컨테이너가 non-root이며 `privileged` 없이 host network와 `NET_RAW`만 사용한다.
+- healthcheck가 통과하고 비정상 종료 또는 호스트 재부팅 후 restart policy로 복구된다.
+- 컨테이너 재생성 후 named volume의 SQLite 상태와 메모가 유지된다.
+- `SIGTERM` 수신 후 30초 안에 정상 종료된다.
+- Docker 로그에서 시작, 스캔 성공·실패, 중복 실행 생략, 종료 원인을 확인할 수 있다.
 - 외부 인터넷에 직접 노출하지 않는 배치가 문서화되어 있다.
 
 ### 단계 7. 인수 테스트와 MVP 릴리스
@@ -276,12 +302,15 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 
 작업:
 
-- macOS에서 Mock Scanner 기반 전체 자동화 테스트를 실행한다.
+- Docker image 재현 빌드와 두 Compose 파일의 `docker compose config` 검증을 실행한다.
+- macOS에서 `compose.dev.yaml`을 기동해 Mock Scanner 기반 전체 자동화 테스트와 HTTP healthcheck를 실행한다.
 - API, SSE, 상태 판정, SQLite 트랜잭션을 포함한 주요 회귀 테스트를 실행한다.
 - 브라우저에서 넓은 화면·좁은 화면·키보드 흐름을 수동 점검한다.
+- Ubuntu에서 `compose.yaml`로 컨테이너를 기동하고 host network, 호스트 인터페이스, non-root, `NET_RAW` 단일 capability를 확인한다.
 - Ubuntu 동일 L2 네트워크에서 실제 `/24`, 장비 연결·해제, Ping 보조, 권한, 주기 중복 방지를 검증한다.
-- 스캔 실패, DB 저장 실패, SSE 재연결, 서버 재시작 장애 시나리오를 점검한다.
-- [테스트와 인수 조건](../spec/06-testing-and-acceptance.md)의 15개 항목을 결과와 함께 체크한다.
+- 컨테이너 재생성 후 named volume 데이터 보존과 `SIGTERM` 30초 내 정상 종료를 검증한다.
+- 스캔 실패, DB 저장 실패, SSE 재연결, 컨테이너 재시작 장애 시나리오를 점검한다.
+- [테스트와 인수 조건](../spec/06-testing-and-acceptance.md)의 18개 항목을 결과와 함께 체크한다.
 - 실제 구현과 스펙 사이 차이가 있으면 구현 또는 관련 스펙을 함께 수정한다.
 - 알려진 제한과 운영 전제, 후속 후보를 릴리스 노트에 남긴다.
 
@@ -289,63 +318,69 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 
 - 자동화 테스트가 모두 통과한다.
 - Ubuntu 실환경 항목이 모두 통과한다.
-- v1 인수 조건 15개가 증거와 함께 체크되어 있다.
+- v1 인수 조건 18개가 증거와 함께 체크되어 있다.
 - 치명적 데이터 손실, 상태 오판, 권한 과다 부여 이슈가 남아 있지 않다.
 
 ## 4. 우선순위와 의존성
 
 ```text
-프로젝트 기반·설정
+Docker 이미지·Compose 기반·설정
   → 상태·SQLite
-  → Mock 수직 흐름
+  → 개발 Compose Mock 수직 흐름
   → HTTP·SSE
   → 대시보드
   → 실제 ARP/Ping
-  → Ubuntu 운영
+  → Ubuntu Docker 운영
   → 최종 인수
 ```
 
-- 단계 0~4를 먼저 완료하면 macOS에서 사용자 흐름 전체를 빠르게 검증할 수 있다.
+- 단계 0~4를 먼저 완료하면 macOS Docker Desktop에서 사용자 흐름 전체를 빠르게 검증할 수 있다.
 - 단계 5는 Scanner 인터페이스 뒤에 붙여 UI·저장소 구현과 분리한다.
-- 단계 6의 설정·로그·권한 요구는 앞 단계부터 지키고, 이 단계에서 배포 산출물로 고정한다.
+- 단계 6의 host network·volume·로그·권한·종료 요구는 앞 단계부터 지키고, 이 단계에서 운영 Compose와 배포 문서로 고정한다.
 - 단계 7은 마지막에만 수행하는 테스트가 아니다. 각 단계 완료 기준을 계속 자동화하고 마지막에 실환경 인수를 묶는다.
 
 ## 5. 테스트 전략
 
 | 수준 | 주요 대상 | 대표 검증 |
 | --- | --- | --- |
+| 컨테이너 구성 검증 | Dockerfile, Compose, 이미지 | 재현 빌드, multi-stage runtime, `docker compose config`, healthcheck |
 | 순수 단위 테스트 | CIDR, 파서, 상태 계산, 요약 | 경계 주소 제외, 상태 전이, MAC·시각 규칙, 할당 후보 |
-| DB 통합 테스트 | 스키마, 조회, 일괄 저장, 부분 변경 | WAL 설정, 제약 조건, 트랜잭션 롤백, 예약·메모 보존 |
+| DB 통합 테스트 | 스키마, 조회, 일괄 저장, 부분 변경 | WAL 설정, 제약 조건, 트랜잭션 롤백, 예약·메모·volume 데이터 보존 |
 | HTTP 통합 테스트 | 페이지, API, SSE | 입력 검증, 공통 오류, 커밋 후 이벤트, 재연결 스냅샷 |
-| Mock 시나리오 테스트 | 스캔 루프 전체 | 시작 스캔, 중복 방지, 연결·해제, 실패·복구 |
+| 개발 Compose 시나리오 | Mock Scanner와 스캔 루프 전체 | 기동·healthcheck, 시작 스캔, 중복 방지, 연결·해제, 실패·복구 |
 | 브라우저 수동 점검 | 대시보드 UX | 검색·필터, 드로어, 반응형, 키보드, 오류·재연결 |
-| Ubuntu 실환경 테스트 | 실제 네트워크·권한 | `/24` 탐지, Ping 보조, `CAP_NET_RAW`, systemd 재시작 |
+| Ubuntu Compose 실환경 | 실제 네트워크·권한·영속화 | host network `/24` 탐지, Ping 보조, non-root/`NET_RAW`, 재생성·재시작, `SIGTERM` |
 
-테스트 fixture의 시각은 고정하고, DB는 테스트별 임시 파일을 사용한다. 네트워크 명령 호출은 파서 테스트와 실제 Ubuntu 인수 테스트를 분리해 macOS 자동화 테스트가 로컬 네트워크 상태에 의존하지 않게 한다.
+테스트 fixture의 시각은 고정하고, DB는 테스트별 임시 파일 또는 격리된 테스트 volume을 사용한다. 네트워크 명령 호출은 파서 테스트와 실제 Ubuntu 인수 테스트를 분리해 macOS 개발 컨테이너가 로컬 네트워크 상태에 의존하지 않게 한다.
 
 ## 6. 주요 위험과 대응
 
 | 위험 | 영향 | MVP 대응 |
 | --- | --- | --- |
-| ARP/Ping 출력의 OS·버전 차이 | 파싱 실패 또는 오판 | 명령 fixture 테스트, Ubuntu 기준 실환경 검증, 파싱 불가 시 전체 스캔 실패 |
-| 패킷 권한·인터페이스 오류 | 스캔 불가 | 시작/스캔 오류를 명확히 표시하고 기존 상태 보존, 최소 capability 운영 |
+| Docker 이미지 또는 Compose 드리프트 | 개발·운영 결과 불일치 | Node 메이저 고정, multi-stage 단일 이미지, 두 Compose의 config/기동 검증 |
+| macOS bridge와 Ubuntu host network 차이 | 개발에서는 실제 ARP 검증 불가 | macOS는 Mock 전용, 실제 L2 탐지는 Ubuntu Docker Engine에서 인수 |
+| ARP/Ping 출력의 도구 버전 차이 | 파싱 실패 또는 오판 | 이미지에 도구를 고정해 패키징, 명령 fixture와 Ubuntu 실환경 검증, 파싱 불가 시 전체 스캔 실패 |
+| host network·capability·인터페이스 오류 | 스캔 불가 또는 과도한 권한 | `privileged` 금지, `cap_drop: ALL` + `NET_RAW`, 명시적 인터페이스 검증, 기존 상태 보존 |
+| named volume 삭제·동시 사용 | SQLite 데이터 손실·손상 | `down -v` 금지, 단일 컨테이너, 백업/복구 절차와 재생성 보존 테스트 |
 | Ping 동시 실행 과다 | 스캔 지연·자원 사용 증가 | 최대 호스트 254 제한, concurrency와 timeout 설정, 중복 실행 방지 |
 | 스캔 중 DB/화면 불일치 | 잘못된 요약·부분 상태 | 명령 종료 후 한 번의 짧은 트랜잭션, 커밋 후 SSE |
 | 일시적 패킷 손실 | `ACTIVE/INACTIVE` 흔들림 | v1은 즉시 반영 원칙 유지, 실제 문제가 확인될 때 후속 임계값 검토 |
-| SSE 유실·서버 재시작 | 브라우저 상태가 오래됨 | 자동 재연결 후 전체 스냅샷 재조회, 이벤트 재생은 제외 |
+| SSE 유실·컨테이너 재시작 | 브라우저 상태가 오래됨 | 자동 재연결 후 전체 스냅샷 재조회, 이벤트 재생은 제외 |
 | `AVAILABLE`의 과신 | IP 충돌 | 화면 전체와 상세에서 “미사용 추정” 및 최종 확인 경고 유지 |
 | 인증 없는 내부 도구의 노출 | 무단 조회·변경 | 신뢰망 한정 배치, 필요 시 기존 인증 프록시 사용 |
 
 ## 7. 산출물 체크리스트
 
 - [ ] Node.js/TypeScript 프로젝트와 설정 검증
+- [ ] multi-stage Dockerfile, `.dockerignore`, 개발·운영 Compose, `.env.example`
 - [ ] SQLite 스키마와 상태 계산
 - [ ] Mock/실제 Scanner와 중복 방지 Scan Loop
 - [ ] EJS 대시보드와 Vanilla JS 상호작용
 - [ ] HTTP API와 SSE
-- [ ] 자동화 테스트와 명령 fixture
-- [ ] Ubuntu 설치·권한·systemd 운영 문서
-- [ ] macOS Mock 및 Ubuntu 실환경 인수 결과
+- [ ] 컨테이너/자동화 테스트와 명령 fixture
+- [ ] Docker named volume 백업·복구와 정상 종료 처리
+- [ ] Ubuntu Docker Engine·Compose 설치·권한·운영 문서
+- [ ] macOS 개발 Compose Mock 및 Ubuntu 운영 Compose 실환경 인수 결과
 - [ ] v1 제한과 후속 후보를 담은 릴리스 노트
 
 ## 8. 스펙 추적표
@@ -357,7 +392,7 @@ MVP 완료 시 다음 사용자 흐름이 처음부터 끝까지 동작해야 �
 | ARP/Ping, CIDR, 실패, 실행 주기 | [02-network-scanning.md](../spec/02-network-scanning.md) |
 | 상태, 예약, 시각, SQLite | [03-state-and-storage.md](../spec/03-state-and-storage.md) |
 | EJS, HTTP API, SSE, 화면 데이터 | [04-web-and-realtime.md](../spec/04-web-and-realtime.md) |
-| 환경 변수, 보안, Ubuntu 운영 | [05-runtime-and-operations.md](../spec/05-runtime-and-operations.md) |
+| Docker 이미지·Compose·환경 변수·보안·Ubuntu 운영 | [05-runtime-and-operations.md](../spec/05-runtime-and-operations.md) |
 | 자동화·실환경 테스트, 완료 판정 | [06-testing-and-acceptance.md](../spec/06-testing-and-acceptance.md) |
 | MVP 제외·후속 범위 | [07-future-scope.md](../spec/07-future-scope.md) |
 | 화면 구조와 상호작용 | [wireframe-dashboard.md](../design/wireframe-dashboard.md) |

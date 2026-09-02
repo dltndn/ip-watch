@@ -42,9 +42,31 @@ dashboard.updated SSE 발행
 
 - 외부 명령은 `exec()`가 아니라 `execFile()`로 실행한다.
 - 명령과 인자를 분리하고 CIDR 및 인터페이스 값을 검증한다.
+- `arp-scan`과 `ping`은 호스트가 아니라 런타임 Docker 이미지에 설치한다.
 - 이전 스캔이 끝나기 전에 새 스캔을 시작하지 않는다.
 - 애플리케이션 시작 직후 첫 스캔을 실행한다.
 - 기본 스캔 간격은 10초이며 환경 변수로 변경할 수 있다.
+
+## Docker 네트워크와 권한
+
+### Ubuntu 운영
+
+ARP는 동일한 L2 네트워크에서 동작하므로 운영 컨테이너는 Ubuntu Docker Engine에서 `network_mode: host`를 사용한다. 컨테이너는 호스트 네트워크 namespace를 공유하며 `NETWORK_INTERFACE`에는 Ubuntu 호스트의 실제 인터페이스 이름을 지정한다.
+
+- host network 사용 시 Compose의 `ports` 설정을 함께 사용하지 않는다.
+- 컨테이너를 `privileged: true`로 실행하지 않는다.
+- Compose에서 모든 Linux capability를 제거한 뒤 `NET_RAW`만 추가한다.
+- Dockerfile에서 `arp-scan` 실행 파일에 `cap_net_raw+p`를 설정한다.
+- 애플리케이션 프로세스는 root가 아닌 전용 사용자로 실행한다.
+- Docker socket과 호스트의 `/dev` 전체를 컨테이너에 마운트하지 않는다.
+
+### macOS 개발
+
+Docker Desktop의 host networking은 TCP와 UDP 연결을 제공하지만 ARP처럼 TCP/UDP보다 아래 계층의 프로토콜을 운영 Ubuntu와 동일하게 제공하지 않는다. 따라서 macOS 컨테이너에서는 실제 ARP 탐지를 검증하지 않는다.
+
+- `compose.dev.yaml`은 일반 bridge network와 localhost 포트 매핑을 사용한다.
+- `USE_MOCK_SCANNER=true`로 실행한다.
+- 실제 스캔 권한과 L2 탐지는 Ubuntu Docker Engine 환경에서만 인수한다.
 
 ## 스캔 실패
 
@@ -53,6 +75,7 @@ dashboard.updated SSE 발행
 - `arp-scan` 또는 `ping` 실행 파일이 없음
 - 패킷 접근 권한이 없음
 - 네트워크 인터페이스가 존재하지 않음
+- 운영 컨테이너가 host network를 사용하지 않아 대상 인터페이스에 접근할 수 없음
 - 명령 제한 시간을 초과함
 - 결과를 파싱할 수 없음
 - 프로세스 실행 자체에 오류가 발생함
@@ -74,3 +97,5 @@ dashboard.updated SSE 발행
 
 - [Node.js child_process](https://nodejs.org/api/child_process.html)
 - [arp-scan](https://github.com/royhills/arp-scan)
+- [Docker host network driver](https://docs.docker.com/engine/network/drivers/host/)
+- [Docker Compose service capabilities](https://docs.docker.com/reference/compose-file/services/)

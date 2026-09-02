@@ -6,6 +6,9 @@
 
 ## 자동화 테스트
 
+- Docker image가 재현 가능하게 빌드됨
+- `compose.yaml`과 `compose.dev.yaml`이 `docker compose config` 검증을 통과함
+- macOS 개발 Compose가 Mock Scanner로 기동되고 HTTP healthcheck를 통과함
 - CIDR 파싱과 네트워크·브로드캐스트 주소 제외
 - ARP와 Ping 출력 파싱
 - `ACTIVE`, `INACTIVE`, `AVAILABLE` 판정
@@ -18,12 +21,17 @@
 
 ## Ubuntu 실환경 테스트
 
+- Docker Engine과 `compose.yaml`로 컨테이너 기동
+- 컨테이너가 root가 아니며 `privileged` 없이 `NET_RAW`만 사용
+- host network에서 Ubuntu 호스트 인터페이스 확인
 - 실제 `/24` 대역에서 IP와 MAC 탐지
 - 개발 디바이스 연결 후 `ACTIVE` 표시
 - 개발 디바이스 연결 해제 후 `INACTIVE` 표시
 - Ping 보조 판정
 - `CAP_NET_RAW`만으로 `arp-scan` 실행
 - 설정된 주기에서 스캔이 중복 실행되지 않음
+- 컨테이너 재생성 후 named volume의 SQLite 데이터와 메모가 유지됨
+- `SIGTERM` 수신 시 `stop_grace_period` 안에 정상 종료
 
 ## v1 인수 조건
 
@@ -42,7 +50,10 @@
 11. 예약 여부와 실제 탐지 상태를 동시에 확인할 수 있다.
 12. 상태·메모·예약 변경이 새로고침 없이 화면에 반영된다.
 13. 스캔 실패 시 기존 상태가 유지되고 오류가 표시된다.
-14. macOS에서 Mock Scanner 기반 자동화 테스트가 통과한다.
-15. Ubuntu 동일 L2 환경에서 실제 장비 탐지 테스트가 통과한다.
+14. macOS에서 `compose.dev.yaml`과 Mock Scanner 기반 자동화 테스트가 통과한다.
+15. Ubuntu에서 `compose.yaml`로 단일 컨테이너를 기동할 수 있다.
+16. 운영 컨테이너는 `privileged` 없이 host network와 `NET_RAW`만으로 실제 장비를 탐지한다.
+17. 컨테이너를 재생성해도 named volume의 SQLite 데이터가 유지된다.
+18. Ubuntu 동일 L2 환경에서 실제 장비 탐지 테스트가 통과한다.
 
 테스트를 작성할 때는 대상 동작에 따라 [README.md](./README.md)에서 관련 영역 스펙을 찾아 함께 읽는다.

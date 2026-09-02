@@ -20,6 +20,15 @@ SQLite를 단일 애플리케이션 인스턴스에서 사용한다. IP별 최�
 
 WAL 모드를 활성화하여 스캔 결과 저장과 대시보드 조회가 서로 불필요하게 막히지 않도록 한다.
 
+### 컨테이너 실행
+
+개발과 운영 모두 Docker Compose로 애플리케이션을 실행한다. 애플리케이션, `arp-scan`, `ping` 및 Node.js 런타임을 하나의 이미지로 패키징하여 호스트별 설치 차이를 줄인다.
+
+- macOS 개발은 Docker Desktop과 Mock Scanner를 사용한다.
+- Ubuntu 운영은 Docker Engine과 실제 Scanner를 사용한다.
+- SQLite 파일은 컨테이너 레이어가 아닌 Docker named volume에 저장한다.
+- 운영 컨테이너는 단일 인스턴스로 실행한다.
+
 ## 기술 스택
 
 | 영역 | 기술 | 용도 |
@@ -33,26 +42,30 @@ WAL 모드를 활성화하여 스캔 결과 저장과 대시보드 조회가 서
 | 실시간 통신 | SSE / EventSource | 상태 변경을 브라우저에 전송 |
 | 네트워크 탐지 | `arp-scan`, `ping` | ARP 기반 탐지와 Ping 보조 확인 |
 | 명령 실행 | Node.js `child_process.execFile` | 셸을 거치지 않고 탐지 명령 실행 |
+| 컨테이너 이미지 | Docker, 공식 Node.js LTS Debian 이미지 | 애플리케이션과 스캔 도구 패키징 |
+| 컨테이너 실행 | Docker Compose v2 | 개발·운영 실행 설정 관리 |
 | 테스트 | Vitest, Supertest | 핵심 로직과 HTTP 동작 검증 |
-| 운영 | systemd | Ubuntu 서비스 실행과 재시작 |
+| 운영 | Docker Engine, Compose restart policy | Ubuntu 서비스 실행과 재시작 |
 
-Node.js는 개발과 운영에서 같은 LTS 메이저 버전을 사용한다. 구현을 시작할 때 `package.json`의 `engines`에 버전을 고정한다.
+Node.js는 개발과 운영에서 같은 LTS 메이저 버전을 사용한다. 구현을 시작할 때 `package.json`의 `engines`와 Docker 베이스 이미지 태그에 같은 메이저 버전을 고정한다.
 
 ## 시스템 구조
 
 ```text
 ┌─────────────────────────────────────────────┐
-│ Ubuntu Server                               │
+│ Ubuntu Server + Docker Engine               │
 │                                             │
-│  Scan Loop                                  │
-│      ↓                                      │
-│  arp-scan + ping                            │
-│      ↓                                      │
-│  상태 판정                                  │
-│      ↓                                      │
-│  SQLite ───── Express + EJS                 │
-│                      │                      │
-│                      └──── SSE              │
+│  ip-watch container (host network)          │
+│   ├─ Scan Loop                              │
+│   │    ↓                                    │
+│   ├─ arp-scan + ping                        │
+│   │    ↓                                    │
+│   ├─ 상태 판정                              │
+│   └─ Express + EJS + SSE                    │
+│             │                               │
+│             ▼                               │
+│      Docker named volume                    │
+│      └─ SQLite                              │
 └───────────────────────────┬─────────────────┘
                             │ HTTP
                             ▼
@@ -77,6 +90,11 @@ Node.js는 개발과 운영에서 같은 LTS 메이저 버전을 사용한다. �
 ```text
 ip-watch/
 ├─ AGENTS.md
+├─ Dockerfile
+├─ .dockerignore
+├─ compose.yaml
+├─ compose.dev.yaml
+├─ .env.example
 ├─ docs/
 │  └─ spec/
 │     ├─ README.md
@@ -113,3 +131,5 @@ ip-watch/
 
 - [Express Template Engine Guide](https://expressjs.com/en/5x/guide/using-template-engines/)
 - [SQLite Write-Ahead Logging](https://www.sqlite.org/wal.html)
+- [Docker multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
+- [Official Node.js Docker image](https://github.com/nodejs/docker-node)
