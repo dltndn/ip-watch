@@ -1,0 +1,7 @@
+Interface: eth0, type: EN10MB, MAC: 00:11:22:33:44:55, IPv4: 10.0.0.10
+Starting arp-scan 1.10.0 with 6 hosts (https://github.com/royhills/arp-scan)
+10.0.0.1	AA:BB:CC:DD:EE:01	First vendor
+10.0.0.1	11:22:33:44:55:66	Second vendor
+
+6 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.10.0: 6 hosts scanned in 0.512 seconds (11.72 hosts/sec). 2 responded

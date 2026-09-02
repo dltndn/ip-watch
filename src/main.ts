@@ -7,6 +7,7 @@ import { ConfigError, loadConfig, type AppConfig } from "./config.js";
 import { openDatabase, type SqliteDatabase } from "./db.js";
 import { registerRoutes } from "./routes.js";
 import { createScanLoop, type ScanLoop } from "./scan-loop.js";
+import { createRealScanner } from "./real-scanner.js";
 import { createMockScanner, type Scanner } from "./scanner.js";
 import { createSseHub, scanOutcomeToEvent, type SseHub } from "./sse.js";
 
@@ -101,7 +102,7 @@ function createScanner(config: AppConfig): Scanner {
     return createMockScanner(config);
   }
 
-  throw new Error("Real scanner is not implemented yet (stage 5)");
+  return createRealScanner(config);
 }
 
 function closeDatabase(db: SqliteDatabase | undefined): void {
