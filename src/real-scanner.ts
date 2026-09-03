@@ -54,6 +54,7 @@ interface ExecLike {
   code?: string | number | null;
   killed?: boolean;
   signal?: NodeJS.Signals | number | null;
+  stderr?: string | Buffer;
 }
 
 export function parseArpScanOutput(stdout: string): NormalizedHostObservation[] {
@@ -244,9 +245,13 @@ function wrapArpScanError(error: unknown): ScanError {
       return new ScanError("arp-scan timed out", { cause: error });
     }
     if (typeof execError.code === "number" && execError.code !== 0) {
-      return new ScanError("arp-scan failed: command exited with an error", {
-        cause: error,
-      });
+      const detail = String(execError.stderr ?? "").trim();
+      return new ScanError(
+        detail
+          ? `arp-scan failed: command exited with an error: ${detail}`
+          : "arp-scan failed: command exited with an error",
+        { cause: error },
+      );
     }
   }
 
