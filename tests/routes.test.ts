@@ -245,6 +245,17 @@ describe("HTTP routes", () => {
 
     expect(ctx.events).toEqual([]);
   });
+
+  it("rejects JSON bodies over 32 KB with a safe common error", async () => {
+    const ctx = assemble(opened, { frames: [okFrame([])] });
+
+    const response = await request(ctx.app)
+      .patch(`/api/ips/${TARGET_IP}`)
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ note: "n".repeat(33 * 1024) }));
+
+    expectError(response, 413, "PAYLOAD_TOO_LARGE");
+  });
 });
 
 function assemble(
@@ -309,7 +320,7 @@ function assemble(
 function expectError(
   response: request.Response,
   status: number,
-  code: "INVALID_INPUT" | "NOT_FOUND" | "INTERNAL",
+  code: "INVALID_INPUT" | "NOT_FOUND" | "PAYLOAD_TOO_LARGE" | "INTERNAL",
 ): void {
   expect(response.status).toBe(status);
   expect(response.body).toEqual({

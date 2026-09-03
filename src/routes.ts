@@ -25,7 +25,11 @@ export interface RouteDeps {
   sse: SseHub;
 }
 
-type ApiErrorCode = "INVALID_INPUT" | "NOT_FOUND" | "INTERNAL";
+type ApiErrorCode =
+  | "INVALID_INPUT"
+  | "NOT_FOUND"
+  | "PAYLOAD_TOO_LARGE"
+  | "INTERNAL";
 
 const NOTE_MAX_LENGTH = 1000;
 
@@ -211,6 +215,16 @@ const apiErrorHandler: ErrorRequestHandler = (
     return;
   }
 
+  if (isPayloadTooLargeError(error)) {
+    sendError(
+      response,
+      413,
+      "PAYLOAD_TOO_LARGE",
+      "Request body must not exceed 32 KB.",
+    );
+    return;
+  }
+
   console.error(error);
   sendError(response, 500, "INTERNAL", "An internal error occurred.");
 };
@@ -226,4 +240,13 @@ function isJsonParseError(error: unknown): boolean {
   }
 
   return error instanceof SyntaxError && candidate.status === 400;
+}
+
+function isPayloadTooLargeError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const candidate = error as { type?: unknown; status?: unknown };
+  return candidate.type === "entity.too.large" || candidate.status === 413;
 }

@@ -131,6 +131,42 @@ describe("scan loop", () => {
     expect(listIpRecords(db, CIDR)).toHaveLength(6);
   });
 
+  it("cancels an active scan and rejects new scans during shutdown", async () => {
+    const scenario = createLifecycleScenario(CIDR);
+    const { db } = openTemp(opened);
+    const gate = createDeferred<void>();
+    const logs: string[] = [];
+    const loop = createLoop(
+      db,
+      new MockScanner({
+        cidr: CIDR,
+        frames: [
+          okFrame([pingObservation(scenario.hosts.ping)], () => gate.promise),
+        ],
+        now: () => FIXED_NOW,
+        repeatLast: false,
+      }),
+      {
+        logger: {
+          log: (message) => logs.push(message),
+          error: (message) => logs.push(message),
+        },
+      },
+    );
+
+    const activeScan = loop.triggerScan();
+    expect(loop.getStatus().isScanning).toBe(true);
+
+    await loop.shutdown();
+
+    await expect(activeScan).resolves.toEqual({ status: "skipped" });
+    await expect(loop.triggerScan()).resolves.toEqual({ status: "skipped" });
+    expect(loop.getStatus().isScanning).toBe(false);
+    expect(listIpRecords(db, CIDR)).toEqual([]);
+    expect(logs.some((line) => line.includes("Scan cancelled"))).toBe(true);
+    expect(logs.some((line) => line.includes("shutdown in progress"))).toBe(true);
+  });
+
   it("preserves records on failure and clears lastError after the next success", async () => {
     const scenario = createLifecycleScenario(CIDR);
     const { db } = openTemp(opened);

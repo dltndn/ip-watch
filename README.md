@@ -2,7 +2,7 @@
 
 IP Watch is an internal dashboard for monitoring one IPv4 CIDR. The MVP is built as a single Node.js application and is run through Docker Compose in both development and production.
 
-This repository currently contains implementation stage 0: the reproducible Node.js 24 LTS project, validated startup configuration, container image, Compose foundations, and test harness. Network scanning and persistence are added in later stages.
+The repository implements stages 0 through 6 of the MVP plan: persisted IP state, Mock and real ARP/Ping scanning, HTTP/SSE APIs, the dashboard, and the hardened Ubuntu container runtime. Final Ubuntu network acceptance remains in stage 7.
 
 ## macOS development
 
@@ -29,15 +29,17 @@ docker build --target test .
 
 To use a different localhost port, set `IP_WATCH_PORT`; to change the mock target subnet, set `TARGET_CIDR` before starting Compose.
 
-## Ubuntu Compose foundation
+## Ubuntu operation
 
-Copy `.env.example` to `.env`, replace `TARGET_CIDR` and `NETWORK_INTERFACE` with values from the Ubuntu host, and then start the production foundation:
+Copy `.env.example` to `.env`, replace `TARGET_CIDR` and `NETWORK_INTERFACE` with values from the Ubuntu host, and then start the production service:
 
 ```sh
 docker compose -f compose.yaml up -d --build
 ```
 
-The production file uses host networking and a named volume at `/app/data`. The real scanner and remaining production hardening are completed in later implementation stages.
+The production file uses host networking, a single `NET_RAW` capability, a non-root process, an HTTP healthcheck, and the `ip-watch-data` named volume at `/app/data`. It must be deployed only on a trusted internal network, never directly on the public internet.
+
+See [docs/operations.md](./docs/operations.md) for Ubuntu prerequisites, deployment, security checks, log inspection, configuration changes, backup and restore, graceful shutdown, and incident handling.
 
 ## Configuration
 

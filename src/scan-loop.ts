@@ -31,6 +31,7 @@ export interface ScanLoopDeps {
 export interface ScanLoop {
   start(): void;
   stop(): void;
+  shutdown(): Promise<void>;
   triggerScan(): Promise<ScanOutcome>;
   getStatus(): ScanStatus;
 }
@@ -44,18 +45,40 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
   let lastError: ScanStatus["lastError"] = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   let running = false;
+  let acceptingScans = true;
+  let activeController: AbortController | null = null;
+  let activeScan: Promise<ScanOutcome> | null = null;
 
-  async function triggerScan(): Promise<ScanOutcome> {
-    if (isScanning) {
-      logger.log(`Scan skipped for ${deps.cidr}: already in progress`);
-      return { status: "skipped" };
+  function triggerScan(): Promise<ScanOutcome> {
+    if (!acceptingScans) {
+      logger.log(`Scan skipped for ${deps.cidr}: shutdown in progress`);
+      return Promise.resolve({ status: "skipped" });
     }
 
-    isScanning = true;
-    logger.log(`Scan starting for ${deps.cidr}`);
+    if (activeScan !== null) {
+      logger.log(`Scan skipped for ${deps.cidr}: already in progress`);
+      return Promise.resolve({ status: "skipped" });
+    }
 
+    const controller = new AbortController();
+    isScanning = true;
+    activeController = controller;
+    logger.log(`Scan starting for ${deps.cidr}`);
+    const scan = runScan(controller.signal);
+    activeScan = scan;
+    const clearActiveScan = () => {
+      if (activeScan === scan) {
+        activeScan = null;
+        activeController = null;
+      }
+    };
+    void scan.then(clearActiveScan, clearActiveScan);
+    return scan;
+  }
+
+  async function runScan(signal: AbortSignal): Promise<ScanOutcome> {
     try {
-      const result = await deps.scanner.scan();
+      const result = await deps.scanner.scan(signal);
       const existing = listIpRecords(deps.db, deps.cidr);
       const snapshot = calculateCidrState(existing, result);
       upsertScanRecords(deps.db, snapshot.records);
@@ -76,6 +99,11 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
       deps.onScanSettled?.(outcome);
       return outcome;
     } catch (error) {
+      if (!acceptingScans && signal.aborted) {
+        logger.log(`Scan cancelled for ${deps.cidr}: shutdown in progress`);
+        return { status: "skipped" };
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       lastError = { message, occurredAt: now().toISOString() };
       logger.error(`Scan failed for ${deps.cidr}: ${message}`);
@@ -89,7 +117,7 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
   }
 
   function start(): void {
-    if (running) {
+    if (running || !acceptingScans) {
       return;
     }
 
@@ -108,10 +136,19 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
   }
 
   function stop(): void {
+    acceptingScans = false;
     running = false;
     if (timer !== null) {
       clearInterval(timer);
       timer = null;
+    }
+    activeController?.abort();
+  }
+
+  async function shutdown(): Promise<void> {
+    stop();
+    if (activeScan !== null) {
+      await activeScan;
     }
   }
 
@@ -126,6 +163,7 @@ export function createScanLoop(deps: ScanLoopDeps): ScanLoop {
   return {
     start,
     stop,
+    shutdown,
     triggerScan,
     getStatus,
   };

@@ -30,11 +30,13 @@ export interface ArpScanCommandInput {
   iface: string;
   cidr: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }
 
 export interface PingCommandInput {
   ip: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }
 
 export interface RealScannerDeps {
@@ -119,7 +121,8 @@ export function createRealScanner(
   const now = deps.now ?? (() => new Date());
 
   return {
-    async scan(): Promise<NormalizedScanResult> {
+    async scan(signal?: AbortSignal): Promise<NormalizedScanResult> {
+      throwIfScanAborted(signal);
       const iface = config.networkInterface;
       if (iface === undefined) {
         throw new ScanError("arp-scan failed: network interface is not configured");
@@ -134,11 +137,15 @@ export function createRealScanner(
           iface,
           cidr: config.targetCidr,
           timeoutMs: config.scanTimeoutMs,
+          ...(signal ? { signal } : {}),
         });
         stdout = arpResult.stdout;
       } catch (error) {
+        throwIfScanAborted(signal);
         throw wrapArpScanError(error);
       }
+
+      throwIfScanAborted(signal);
 
       const parsed = parseArpScanOutput(stdout);
       if (parsed.length === 0 && !looksLikeArpScanOutput(stdout)) {
@@ -152,15 +159,20 @@ export function createRealScanner(
       const pingTargets = usableHosts.filter((ip) => !arpIps.has(ip));
 
       const pingResponders: NormalizedHostObservation[] = [];
-      await mapWithConcurrency(pingTargets, config.pingConcurrency, async (ip) => {
+      await mapWithConcurrency(pingTargets, config.pingConcurrency, signal, async (ip) => {
         try {
-          await runPing({ ip, timeoutMs: config.pingTimeoutMs });
+          await runPing({
+            ip,
+            timeoutMs: config.pingTimeoutMs,
+            ...(signal ? { signal } : {}),
+          });
           pingResponders.push({
             ipAddress: ip,
             responded: true,
             macAddress: null,
           });
         } catch (error) {
+          throwIfScanAborted(signal);
           const classified = classifyPingResult(error);
           if (classified.status === "no-reply") {
             return;
@@ -192,7 +204,11 @@ async function defaultRunArpScan(
   const result = await execFileAsync(
     "arp-scan",
     ["--interface", input.iface, input.cidr],
-    { timeout: input.timeoutMs, encoding: "utf8" },
+    {
+      timeout: input.timeoutMs,
+      encoding: "utf8",
+      ...(input.signal ? { signal: input.signal } : {}),
+    },
   );
   return { stdout: result.stdout };
 }
@@ -201,7 +217,11 @@ async function defaultRunPing(input: PingCommandInput): Promise<void> {
   await execFileAsync(
     "ping",
     ["-c", "1", "-n", "-W", formatPingTimeoutSeconds(input.timeoutMs), input.ip],
-    { timeout: input.timeoutMs + PING_EXEC_BUFFER_MS, encoding: "utf8" },
+    {
+      timeout: input.timeoutMs + PING_EXEC_BUFFER_MS,
+      encoding: "utf8",
+      ...(input.signal ? { signal: input.signal } : {}),
+    },
   );
 }
 
@@ -259,6 +279,7 @@ function isCommandTimeout(error: ExecLike): boolean {
 async function mapWithConcurrency<T>(
   items: readonly T[],
   concurrency: number,
+  signal: AbortSignal | undefined,
   worker: (item: T) => Promise<void>,
 ): Promise<void> {
   if (items.length === 0) {
@@ -272,6 +293,7 @@ async function mapWithConcurrency<T>(
   await Promise.all(
     Array.from({ length: workerCount }, async () => {
       while (firstError === undefined) {
+        throwIfScanAborted(signal);
         const index = nextIndex;
         nextIndex += 1;
         if (index >= items.length) {
@@ -290,4 +312,10 @@ async function mapWithConcurrency<T>(
       }
     }),
   );
+}
+
+function throwIfScanAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new ScanError("scan cancelled");
+  }
 }

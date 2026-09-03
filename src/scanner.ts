@@ -6,7 +6,7 @@ import {
 } from "./state.js";
 
 export interface Scanner {
-  scan(): Promise<NormalizedScanResult>;
+  scan(signal?: AbortSignal): Promise<NormalizedScanResult>;
 }
 
 export class ScanError extends Error {
@@ -71,11 +71,13 @@ export class MockScanner implements Scanner {
     this.loop = options.loop ?? false;
   }
 
-  async scan(): Promise<NormalizedScanResult> {
+  async scan(signal?: AbortSignal): Promise<NormalizedScanResult> {
+    throwIfScanAborted(signal);
     const frame = this.takeFrame();
     if (frame.gate) {
-      await frame.gate();
+      await waitForGate(frame.gate(), signal);
     }
+    throwIfScanAborted(signal);
 
     if (frame.kind === "error") {
       if (frame.cause !== undefined) {
@@ -118,6 +120,43 @@ export class MockScanner implements Scanner {
 
     throw new ScanError("Mock scanner has no remaining frames");
   }
+}
+
+function throwIfScanAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new ScanError("scan cancelled");
+  }
+}
+
+async function waitForGate(
+  gate: Promise<void>,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  if (signal === undefined) {
+    await gate;
+    return;
+  }
+
+  throwIfScanAborted(signal);
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new ScanError("scan cancelled"));
+    };
+    const cleanUp = () => {
+      signal.removeEventListener("abort", onAbort);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void gate.then(
+      () => {
+        cleanUp();
+        resolve();
+      },
+      (error: unknown) => {
+        cleanUp();
+        reject(error);
+      },
+    );
+  });
 }
 
 export function arpObservation(

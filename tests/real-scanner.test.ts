@@ -228,6 +228,33 @@ describe("createRealScanner", () => {
     expect(result.observations).toEqual([]);
     expect(() => calculateCidrState([], result)).not.toThrow();
   });
+
+  it("propagates cancellation to the active arp-scan command", async () => {
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const scanner = createRealScanner(baseConfig(), {
+      now: () => FIXED_NOW,
+      runArpScan: ({ signal }) => {
+        receivedSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            { once: true },
+          );
+        });
+      },
+      runPing: async () => undefined,
+    });
+
+    const scan = scanner.scan(controller.signal);
+    controller.abort();
+
+    expect(receivedSignal).toBe(controller.signal);
+    await expect(scan).rejects.toSatisfy((error: unknown) => {
+      return error instanceof ScanError && error.message === "scan cancelled";
+    });
+  });
 });
 
 describe("classifyPingResult", () => {

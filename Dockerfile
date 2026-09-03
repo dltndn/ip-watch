@@ -22,6 +22,8 @@ CMD ["npm", "run", "dev"]
 
 FROM build AS test
 COPY tests ./tests
+COPY views ./views
+COPY public ./public
 RUN npm run typecheck && npm test
 
 FROM node:24-bookworm-slim AS production-dependencies
@@ -38,6 +40,8 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends arp-scan iputils-ping libcap2-bin \
     && rm -rf /var/lib/apt/lists/* \
+    && setcap cap_net_raw+p /usr/sbin/arp-scan \
+    && getcap /usr/sbin/arp-scan \
     && mkdir -p /app/data \
     && chown node:node /app/data
 COPY --from=production-dependencies /app/node_modules ./node_modules

@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import type { Server } from "node:http";
 
 import type { Express } from "express";
 
@@ -77,12 +78,39 @@ export function start(
       },
     );
 
+    let shuttingDown = false;
+    const shutdown = async (reason: string, exitCode: number): Promise<void> => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+      process.exitCode = exitCode;
+      console.log(`Shutdown started: ${reason}`);
+
+      try {
+        await runtime.scanLoop.shutdown();
+        runtime.sse.close();
+        await closeHttpServer(server);
+        closeDatabase(runtime.db);
+        console.log("Shutdown complete");
+      } catch (error) {
+        process.exitCode = 1;
+        console.error("Shutdown failed", error);
+        runtime.sse.close();
+        closeDatabase(runtime.db);
+      }
+    };
+
+    process.once("SIGTERM", () => {
+      void shutdown("SIGTERM received", 0);
+    });
+    process.once("SIGINT", () => {
+      void shutdown("SIGINT received", 0);
+    });
+
     server.on("error", (error) => {
       console.error("HTTP server failed", error);
-      scanLoop?.stop();
-      sse?.close();
-      closeDatabase(db);
-      process.exitCode = 1;
+      void shutdown("HTTP server error", 1);
     });
   } catch (error) {
     scanLoop?.stop();
@@ -109,6 +137,22 @@ function closeDatabase(db: SqliteDatabase | undefined): void {
   if (db?.open) {
     db.close();
   }
+}
+
+function closeHttpServer(server: Server): Promise<void> {
+  if (!server.listening) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 const entrypoint = process.argv[1];
