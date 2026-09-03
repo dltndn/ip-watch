@@ -253,6 +253,7 @@ function buildDefaultDevFrames(cidr: string): MockScanFrame[] {
     okFrame([pingObservation(b), arpObservation(c, macC)]),
     okFrame([arpObservation(a, macAChanged), pingObservation(b)]),
     okFrame([arpObservation(a, macAChanged), pingObservation(d)]),
+    errorFrame("mock scan failed"),
   ];
 }
 

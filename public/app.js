@@ -431,8 +431,31 @@
     els.drawerClose.addEventListener("click", closeDrawer);
     els.scrim.addEventListener("click", closeDrawer);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.selectedIp) {
+      if (!state.selectedIp) {
+        return;
+      }
+      if (event.key === "Escape") {
         closeDrawer();
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = [
+          ...els.drawer.querySelectorAll(
+            "button:not(:disabled), textarea:not(:disabled)",
+          ),
+        ];
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) {
+          return;
+        }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     });
 

@@ -219,7 +219,7 @@ describe("HTTP routes", () => {
     ]);
   });
 
-  it("GET / renders HTML that includes the target CIDR", async () => {
+  it("GET / renders the dashboard and accessible drawer shell", async () => {
     const ctx = assemble(opened, { frames: [okFrame([])] });
 
     const response = await request(ctx.app).get("/");
@@ -227,6 +227,11 @@ describe("HTTP routes", () => {
     expect(response.status).toBe(200);
     expect(response.type).toMatch(/html/);
     expect(response.text).toContain(CIDR);
+    expect(response.text).toContain('class="visually-hidden">IP, MAC, 메모 검색');
+    expect(response.text).toContain('role="dialog"');
+    expect(response.text).toContain('aria-modal="true"');
+    expect(response.text).toContain('id="drawer-reserved" hidden');
+    expect(response.text).toContain("실제 미사용을 보장하지 않습니다");
   });
 
   it("returns the common error body for invalid JSON and unknown API paths", async () => {

@@ -142,7 +142,7 @@ describe("MockScanner", () => {
     await expect(scanner.scan()).rejects.toBeInstanceOf(ScanError);
   });
 
-  it("builds a deterministic default mock scanner from config", async () => {
+  it("builds a deterministic default lifecycle with error recovery", async () => {
     const scanner = createMockScanner(
       { targetCidr: CIDR },
       { now: () => FIXED_NOW },
@@ -155,5 +155,12 @@ describe("MockScanner", () => {
     expect(first.observations).toEqual([]);
     expect(second.observations.length).toBeGreaterThan(0);
     expect(() => calculateCidrState([], second)).not.toThrow();
+
+    await scanner.scan();
+    await scanner.scan();
+    await scanner.scan();
+    await scanner.scan();
+    await expect(scanner.scan()).rejects.toThrow("mock scan failed");
+    await expect(scanner.scan()).resolves.toMatchObject({ observations: [] });
   });
 });
