@@ -28,7 +28,7 @@
 }
 ```
 
-메모와 예약 여부 중 전달된 값만 변경한다. 성공적으로 커밋한 뒤 `dashboard.updated` 이벤트를 발행한다.
+메모와 예약 여부 중 전달된 값만 변경한다. 성공적으로 커밋한 뒤 `dashboard.updated` 이벤트를 발행한다. 성공 응답 본문은 갱신된 IP 레코드이며, `GET /api/dashboard`와 같이 파생 표시 필드 `effectiveStatus`를 포함한다.
 
 ### 공통 오류 형식
 

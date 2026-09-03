@@ -10,6 +10,7 @@ import { loadConfig } from "../src/config.js";
 import {
   listIpRecords,
   openDatabase,
+  upsertScanRecords,
   type SqliteDatabase,
 } from "../src/db.js";
 import { registerRoutes } from "../src/routes.js";
@@ -89,6 +90,7 @@ describe("HTTP routes", () => {
     expect(response.status).toBe(200);
     expect(response.body.note).toBe("lab printer");
     expect(response.body.ipAddress).toBe(TARGET_IP);
+    expect(response.body.effectiveStatus).toBe(response.body.observedStatus);
     expect(
       listIpRecords(ctx.db, CIDR).find((row) => row.ipAddress === TARGET_IP)
         ?.note,
@@ -116,6 +118,37 @@ describe("HTTP routes", () => {
     expect(ctx.events).toEqual([
       { reason: "reservation", changedIps: [TARGET_IP], scannedAt: null },
     ]);
+  });
+
+  it("PATCH /api/ips/:ip includes effectiveStatus AVAILABLE for stale INACTIVE when aging is on", async () => {
+    const ctx = assemble(opened, {
+      frames: [okFrame([])],
+      staleThresholdDays: 7,
+    });
+    const lastSeenAt = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    upsertScanRecords(ctx.db, [
+      {
+        cidr: CIDR,
+        ipAddress: TARGET_IP,
+        observedStatus: "INACTIVE",
+        isReserved: false,
+        macAddress: null,
+        note: "",
+        firstSeenAt: lastSeenAt,
+        lastSeenAt,
+        lastCheckedAt: lastSeenAt,
+      },
+    ]);
+
+    const response = await request(ctx.app)
+      .patch(`/api/ips/${TARGET_IP}`)
+      .send({ note: "x" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.note).toBe("x");
+    expect(response.body.observedStatus).toBe("INACTIVE");
+    expect(response.body.effectiveStatus).toBe("AVAILABLE");
+    expect(response.body.lastSeenAt).toBe(lastSeenAt);
   });
 
   it("PATCH /api/ips/:ip with note and isReserved broadcasts both events", async () => {
@@ -268,6 +301,7 @@ function assemble(
   options: {
     frames: ConstructorParameters<typeof MockScanner>[0]["frames"];
     wireScanSettled?: boolean;
+    staleThresholdDays?: number;
   },
 ) {
   const dir = mkdtempSync(join(tmpdir(), "ip-watch-routes-"));
@@ -278,6 +312,9 @@ function assemble(
     USE_MOCK_SCANNER: "true",
     DATABASE_PATH: databasePath,
     BIND_ADDRESS: "127.0.0.1",
+    ...(options.staleThresholdDays !== undefined
+      ? { STALE_THRESHOLD_DAYS: String(options.staleThresholdDays) }
+      : {}),
   });
   const events: DashboardUpdateEvent[] = [];
   const recordingHub: SseHub = {

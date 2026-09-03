@@ -16,7 +16,7 @@ import {
 } from "./db.js";
 import type { ScanLoop } from "./scan-loop.js";
 import type { SseHub } from "./sse.js";
-import { listUsableHosts } from "./state.js";
+import { effectiveStatus, listUsableHosts } from "./state.js";
 
 export interface RouteDeps {
   config: AppConfig;
@@ -120,7 +120,12 @@ export function registerRoutes(app: Express, deps: RouteDeps): void {
         });
       }
 
-      response.status(200).json(updated);
+      const nowMs = Date.now();
+      const thresholdMs = deps.config.staleThresholdDays * 86_400_000;
+      response.status(200).json({
+        ...updated,
+        effectiveStatus: effectiveStatus(updated, nowMs, thresholdMs),
+      });
     } catch (error) {
       if (isIpRecordNotFound(error)) {
         sendError(response, 404, "NOT_FOUND", "IP address was not found.");
