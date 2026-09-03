@@ -96,7 +96,7 @@ data: {"reason":"scan","changedIps":["172.16.3.12"],"scannedAt":"2026-09-02T01:0
 - IP, MAC 또는 메모 검색
 - 상태와 예약 여부 필터
 
-탐지 상태 수의 합은 전체 대상 IP 수와 같아야 한다. 예약 수는 탐지 상태와 중복되는 별도 지표다. 할당 후보 수는 `AVAILABLE`이면서 예약되지 않은 IP만 포함한다.
+탐지 상태 수의 합은 전체 대상 IP 수와 같아야 한다. 예약 수는 탐지 상태와 중복되는 별도 지표다. 할당 후보 수는 표시 상태 `effectiveStatus`가 `AVAILABLE`이면서 예약되지 않은 IP만 포함한다. `STALE_THRESHOLD_DAYS`가 꺼져 있으면 `effectiveStatus`는 `observed_status`와 같으므로 기존 정의와 동일하다.
 
 권장 표현:
 
@@ -122,7 +122,7 @@ IP를 선택하면 다음 정보를 표시한다.
 
 작업자는 상세 영역에서 메모를 변경하고 IP를 예약하거나 예약 해제할 수 있다.
 
-상태 필드와 할당 후보 계산은 [03-state-and-storage.md](./03-state-and-storage.md)를 따른다.
+그리드·필터·상태 필드는 표시 상태 `effectiveStatus`를 따른다. stale `INACTIVE`(오래 응답 없음)는 `AVAILABLE`과 같은 회색 ○로 보이며, 드로어에서만 "과거 사용 이력" 문구와 `last_seen_at`으로 구분한다. 판정·저장 규칙은 [03-state-and-storage.md](./03-state-and-storage.md)를 따른다.
 
 ## 참고 자료
 

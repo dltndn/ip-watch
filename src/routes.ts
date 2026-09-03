@@ -37,7 +37,14 @@ export function registerRoutes(app: Express, deps: RouteDeps): void {
   const usableHosts = new Set(listUsableHosts(deps.config.targetCidr));
 
   app.get("/", (_request, response) => {
-    const snapshot = getDashboardSnapshot(deps.db, deps.config.targetCidr);
+    const nowMs = Date.now();
+    const thresholdMs = deps.config.staleThresholdDays * 86_400_000;
+    const snapshot = getDashboardSnapshot(
+      deps.db,
+      deps.config.targetCidr,
+      nowMs,
+      thresholdMs,
+    );
     const scan = deps.scanLoop.getStatus();
     response.render("dashboard", {
       cidr: deps.config.targetCidr,
@@ -47,7 +54,14 @@ export function registerRoutes(app: Express, deps: RouteDeps): void {
   });
 
   app.get("/api/dashboard", (_request, response) => {
-    const snapshot = getDashboardSnapshot(deps.db, deps.config.targetCidr);
+    const nowMs = Date.now();
+    const thresholdMs = deps.config.staleThresholdDays * 86_400_000;
+    const snapshot = getDashboardSnapshot(
+      deps.db,
+      deps.config.targetCidr,
+      nowMs,
+      thresholdMs,
+    );
     response.status(200).json({
       cidr: deps.config.targetCidr,
       records: snapshot.records,

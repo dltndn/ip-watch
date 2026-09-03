@@ -137,6 +137,7 @@ volumes:
 | `PING_TIMEOUT_MS` | `1000` | IP별 Ping 제한 시간 |
 | `PING_CONCURRENCY` | `20` | Ping 동시 실행 수 |
 | `USE_MOCK_SCANNER` | 개발 `true`, 운영 `false` | Mock Scanner 사용 여부 |
+| `STALE_THRESHOLD_DAYS` | `0` (꺼짐) | 오래 응답 없는 `INACTIVE`를 표시상 `AVAILABLE`로 보는 일 수. 미설정/`0`이면 끄고, 최대 `36500` |
 
 설정값은 애플리케이션 시작 시 검증한다. 잘못된 CIDR, 허용 호스트 수 초과 또는 누락된 필수 설정이 있으면 스캔을 시작하지 않고 컨테이너를 오류 상태로 종료한다.
 

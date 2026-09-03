@@ -83,4 +83,53 @@ describe("loadConfig", () => {
       }),
     ).toThrow(ConfigError);
   });
+
+  it("defaults STALE_THRESHOLD_DAYS to 0 when unset", () => {
+    const config = loadConfig({
+      TARGET_CIDR: "192.168.1.0/24",
+      USE_MOCK_SCANNER: "true",
+    });
+    expect(config.staleThresholdDays).toBe(0);
+  });
+
+  it('treats STALE_THRESHOLD_DAYS "0" as off', () => {
+    const config = loadConfig({
+      TARGET_CIDR: "192.168.1.0/24",
+      USE_MOCK_SCANNER: "true",
+      STALE_THRESHOLD_DAYS: "0",
+    });
+    expect(config.staleThresholdDays).toBe(0);
+  });
+
+  it("accepts a valid positive STALE_THRESHOLD_DAYS", () => {
+    const config = loadConfig({
+      TARGET_CIDR: "192.168.1.0/24",
+      USE_MOCK_SCANNER: "true",
+      STALE_THRESHOLD_DAYS: "30",
+    });
+    expect(config.staleThresholdDays).toBe(30);
+  });
+
+  it("rejects STALE_THRESHOLD_DAYS above the maximum", () => {
+    expect(() =>
+      loadConfig({
+        TARGET_CIDR: "192.168.1.0/24",
+        USE_MOCK_SCANNER: "true",
+        STALE_THRESHOLD_DAYS: "36501",
+      }),
+    ).toThrow(ConfigError);
+  });
+
+  it.each(["-1", "1.5", "abc", "30d"])(
+    "rejects invalid STALE_THRESHOLD_DAYS %s",
+    (value) => {
+      expect(() =>
+        loadConfig({
+          TARGET_CIDR: "192.168.1.0/24",
+          USE_MOCK_SCANNER: "true",
+          STALE_THRESHOLD_DAYS: value,
+        }),
+      ).toThrow(ConfigError);
+    },
+  );
 });

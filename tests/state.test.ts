@@ -4,6 +4,7 @@ import {
   CidrError,
   ScanStateError,
   calculateCidrState,
+  effectiveStatus,
   listUsableHosts,
   parseIpv4Cidr,
   summarizeRecords,
@@ -359,6 +360,84 @@ describe("calculateCidrState", () => {
   });
 });
 
+describe("effectiveStatus", () => {
+  const nowMs = Date.parse("2026-09-02T00:00:00.000Z");
+  const thresholdMs = 86_400_000;
+
+  it("treats age just under the threshold as not stale", () => {
+    const record = inactiveAt(new Date(nowMs - thresholdMs + 1).toISOString());
+    expect(effectiveStatus(record, nowMs, thresholdMs)).toBe("INACTIVE");
+  });
+
+  it("treats age equal to the threshold as not stale", () => {
+    const record = inactiveAt(new Date(nowMs - thresholdMs).toISOString());
+    expect(effectiveStatus(record, nowMs, thresholdMs)).toBe("INACTIVE");
+  });
+
+  it("treats age just over the threshold as stale AVAILABLE", () => {
+    const record = inactiveAt(new Date(nowMs - thresholdMs - 1).toISOString());
+    expect(effectiveStatus(record, nowMs, thresholdMs)).toBe("AVAILABLE");
+  });
+
+  it("leaves ACTIVE and AVAILABLE unchanged when aging is on", () => {
+    expect(
+      effectiveStatus(
+        { observedStatus: "ACTIVE", lastSeenAt: "2020-01-01T00:00:00.000Z" },
+        nowMs,
+        thresholdMs,
+      ),
+    ).toBe("ACTIVE");
+    expect(
+      effectiveStatus(
+        { observedStatus: "AVAILABLE", lastSeenAt: null },
+        nowMs,
+        thresholdMs,
+      ),
+    ).toBe("AVAILABLE");
+  });
+
+  it("equals observedStatus when the threshold is 0", () => {
+    const staleInactive = inactiveAt("2020-01-01T00:00:00.000Z");
+    expect(effectiveStatus(staleInactive, nowMs, 0)).toBe("INACTIVE");
+    expect(effectiveStatus(staleInactive, nowMs, 0)).toBe(staleInactive.observedStatus);
+  });
+});
+
+describe("summarizeRecords aging", () => {
+  const nowMs = Date.parse("2026-09-02T00:00:00.000Z");
+  const thresholdMs = 86_400_000;
+
+  it("counts a stale unreserved INACTIVE as AVAILABLE and as a candidate", () => {
+    const records = [
+      inactiveAt(new Date(nowMs - thresholdMs - 1).toISOString()),
+      inactiveAt(new Date(nowMs - thresholdMs).toISOString(), "10.0.0.2"),
+    ];
+
+    expect(summarizeRecords(records, nowMs, thresholdMs)).toEqual({
+      total: 2,
+      active: 0,
+      inactive: 1,
+      available: 1,
+      reserved: 0,
+      allocationCandidates: 1,
+    });
+  });
+
+  it("matches observedStatus counts when the threshold is omitted or 0", () => {
+    const records = [inactiveAt("2020-01-01T00:00:00.000Z")];
+    const observed = summarizeRecords(records);
+    expect(observed).toEqual(summarizeRecords(records, nowMs, 0));
+    expect(observed).toEqual({
+      total: 1,
+      active: 0,
+      inactive: 1,
+      available: 0,
+      reserved: 0,
+      allocationCandidates: 0,
+    });
+  });
+});
+
 function scanResult(
   observations: NormalizedHostObservation[],
   scannedAt = SCAN_AT,
@@ -385,4 +464,18 @@ function record(
   const found = snapshot.records.find((item) => item.ipAddress === ipAddress);
   expect(found).toBeDefined();
   return found as IpRecord;
+}
+
+function inactiveAt(lastSeenAt: string, ipAddress = "10.0.0.1"): IpRecord {
+  return {
+    cidr: CIDR,
+    ipAddress,
+    observedStatus: "INACTIVE",
+    isReserved: false,
+    macAddress: null,
+    note: "",
+    firstSeenAt: lastSeenAt,
+    lastSeenAt,
+    lastCheckedAt: lastSeenAt,
+  };
 }

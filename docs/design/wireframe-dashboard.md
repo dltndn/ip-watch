@@ -78,14 +78,14 @@
 | ACTIVE | 사용 중 |
 | INACTIVE | 과거 사용 |
 | AVAILABLE | 미사용 추정 |
-| 할당 후보 | `AVAILABLE && !isReserved` (강조 표기) |
+| 할당 후보 | 표시 상태 `effectiveStatus == AVAILABLE && !isReserved` (강조 표기). aging이 꺼져 있으면 `observed_status`와 같다 |
 | 예약됨 | `isReserved == true` |
 
 규칙(반드시 지킨다):
 
-- `ACTIVE + INACTIVE + AVAILABLE == 전체`. 탐지 상태 수의 합은 전체 대상 IP 수와 같다.
+- `ACTIVE + INACTIVE + AVAILABLE == 전체`. 탐지 상태 수의 합은 전체 대상 IP 수와 같다. aging이 켜져 있으면 이 합은 **표시 상태** `effectiveStatus` 기준이다.
 - 예약됨은 탐지 상태와 중복되는 **별도 지표**다(상태 카드 합계에 더하지 않는다).
-- 할당 후보는 `AVAILABLE`이면서 예약되지 않은 IP만 포함한다.
+- 할당 후보는 표시 상태가 `AVAILABLE`이면서 예약되지 않은 IP만 포함한다.
 
 (근거: [03-state-and-storage](../spec/03-state-and-storage.md) 상태와 예약의 분리)
 
@@ -94,7 +94,7 @@
 검색과 필터는 **최대 254개를 브라우저에서** 처리한다. 별도 검색 API는 두지 않는다.
 
 - **검색**: IP · MAC · 메모를 대상으로 부분 일치. 입력 즉시 그리드에 반영.
-- **상태 필터**: `전체` · `사용 중` · `과거 사용` · `미사용 추정` · `할당 후보`. `할당 후보`는 `AVAILABLE && !isReserved` 계산 결과를 필터한다.
+- **상태 필터**: `전체` · `사용 중` · `과거 사용` · `미사용 추정` · `할당 후보`. `할당 후보`는 `effectiveStatus == AVAILABLE && !isReserved` 계산 결과를 필터한다.
 - **예약 필터**: `전체` · `예약만` · `미예약`.
 - **범례**: 글리프↔상태 매핑과 예약 표기를 항상 노출해, 색에 의존하지 않고 의미를 읽게 한다.
 
@@ -123,19 +123,20 @@
 표시 필드([04-web-and-realtime](../spec/04-web-and-realtime.md) IP 상세):
 
 - IP 주소
-- 현재 탐지 상태(글리프 + 라벨)
+- 현재 탐지 상태(글리프 + 라벨) — 표시 상태 `effectiveStatus`
 - 예약 여부(배지)
 - MAC 주소
 - 최초 발견 시각
 - 마지막 사용 확인 시각
 - 마지막 검사 시각
 - 작업 메모
+- stale 항목이면 "과거 사용 이력" 안내(`observed_status`가 `INACTIVE`인데 표시는 `AVAILABLE`)
 
 편집 동작:
 
 - **메모**: 텍스트 편집 후 저장(최대 1,000자).
 - **예약**: 예약/예약 해제 토글.
-- 상태가 `AVAILABLE`이면 "실제 미사용을 보장하지 않으며 고정 IP 할당 전 최종 확인이 필요하다"는 안내를 함께 보인다. (근거: [03-state-and-storage](../spec/03-state-and-storage.md))
+- 표시 상태가 `AVAILABLE`이면 "실제 미사용을 보장하지 않으며 고정 IP 할당 전 최종 확인이 필요하다"는 안내를 함께 보인다. (근거: [03-state-and-storage](../spec/03-state-and-storage.md))
 
 닫기: 닫기 버튼 · 스크림(바깥 영역) 클릭 · `Esc` 키.
 

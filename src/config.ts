@@ -17,6 +17,7 @@ const DEFAULTS = {
 
 const MAX_TIMER_MS = 2_147_483_647;
 const MAX_TARGET_HOSTS = MAX_USABLE_HOSTS;
+const MAX_STALE_THRESHOLD_DAYS = 36_500;
 
 export type NodeEnvironment = "development" | "test" | "production";
 
@@ -33,6 +34,7 @@ export interface AppConfig {
   pingTimeoutMs: number;
   pingConcurrency: number;
   useMockScanner: boolean;
+  staleThresholdDays: number;
 }
 
 export class ConfigError extends Error {
@@ -104,6 +106,7 @@ export function loadConfig(environment: Environment = process.env): AppConfig {
       MAX_TARGET_HOSTS,
     ),
     useMockScanner,
+    staleThresholdDays: parseStaleThresholdDays(environment.STALE_THRESHOLD_DAYS),
   };
 }
 
@@ -133,6 +136,27 @@ function parsePositiveInteger(name: string, value: string, maximum: number): num
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) {
     throw new ConfigError(`${name} must be between 1 and ${maximum}`);
+  }
+  return parsed;
+}
+
+function parseStaleThresholdDays(value: string | undefined): number {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed === "" || trimmed === "0") {
+    return 0;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new ConfigError("STALE_THRESHOLD_DAYS must be a non-negative integer");
+  }
+  const parsed = Number(trimmed);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1 ||
+    parsed > MAX_STALE_THRESHOLD_DAYS
+  ) {
+    throw new ConfigError(
+      `STALE_THRESHOLD_DAYS must be between 0 and ${MAX_STALE_THRESHOLD_DAYS}`,
+    );
   }
   return parsed;
 }

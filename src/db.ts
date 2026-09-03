@@ -2,7 +2,9 @@ import Database from "better-sqlite3";
 
 import {
   compareIpv4Addresses,
+  effectiveStatus,
   summarizeRecords,
+  type DashboardRecord,
   type IpRecord,
   type ObservedStatus,
   type StatusSummary,
@@ -16,7 +18,7 @@ export interface IpRecordPatch {
 }
 
 export interface DashboardSnapshot {
-  records: IpRecord[];
+  records: DashboardRecord[];
   summary: StatusSummary;
 }
 
@@ -198,12 +200,19 @@ export function updateIpRecord(
 export function getDashboardSnapshot(
   db: SqliteDatabase,
   cidr: string,
+  nowMs?: number,
+  thresholdMs?: number,
 ): DashboardSnapshot {
   return db.transaction((): DashboardSnapshot => {
     const records = listIpRecords(db, cidr);
+    const resolvedNowMs = nowMs ?? 0;
+    const resolvedThresholdMs = thresholdMs ?? 0;
     return {
-      records,
-      summary: summarizeRecords(records),
+      records: records.map((record) => ({
+        ...record,
+        effectiveStatus: effectiveStatus(record, resolvedNowMs, resolvedThresholdMs),
+      })),
+      summary: summarizeRecords(records, nowMs, thresholdMs),
     };
   })();
 }

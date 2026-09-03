@@ -660,6 +660,15 @@ textarea {
   font-size: 13px;
 }
 
+.drawer__stale-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--available);
+  background: var(--available-soft);
+  font-size: 13px;
+}
+
 .note-label {
   font-size: 12px;
   font-weight: 600;

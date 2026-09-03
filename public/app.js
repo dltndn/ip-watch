@@ -31,6 +31,7 @@
     drawerFirstSeen: document.getElementById("drawer-first-seen"),
     drawerLastSeen: document.getElementById("drawer-last-seen"),
     drawerLastChecked: document.getElementById("drawer-last-checked"),
+    drawerStaleNote: document.getElementById("drawer-stale-note"),
     drawerWarning: document.getElementById("drawer-available-warning"),
     drawerNote: document.getElementById("drawer-note"),
     noteCount: document.getElementById("note-count"),
@@ -57,8 +58,12 @@
     return STATUS[observedStatus] ?? STATUS.AVAILABLE;
   }
 
+  function displayStatus(record) {
+    return record.effectiveStatus ?? record.observedStatus;
+  }
+
   function isCandidate(record) {
-    return record.observedStatus === "AVAILABLE" && !record.isReserved;
+    return displayStatus(record) === "AVAILABLE" && !record.isReserved;
   }
 
   function formatLocal(iso) {
@@ -85,7 +90,7 @@
   }
 
   function tileLabel(record) {
-    const status = statusMeta(record.observedStatus).label;
+    const status = statusMeta(displayStatus(record)).label;
     return record.isReserved
       ? `${record.ipAddress} · ${status} · (예약)`
       : `${record.ipAddress} · ${status}`;
@@ -109,7 +114,7 @@
     }
 
     if (state.statusFilter === "ACTIVE" || state.statusFilter === "INACTIVE" || state.statusFilter === "AVAILABLE") {
-      if (record.observedStatus !== state.statusFilter) {
+      if (displayStatus(record) !== state.statusFilter) {
         return false;
       }
     } else if (state.statusFilter === "candidate" && !isCandidate(record)) {
@@ -204,10 +209,10 @@
     setHidden(els.empty, true);
     const fragment = document.createDocumentFragment();
     for (const record of visible) {
-      const status = statusMeta(record.observedStatus);
+      const status = statusMeta(displayStatus(record));
       const tile = document.createElement("button");
       tile.type = "button";
-      tile.className = `ip-tile ip-tile--${record.observedStatus}`;
+      tile.className = `ip-tile ip-tile--${displayStatus(record)}`;
       tile.dataset.ip = record.ipAddress;
       tile.setAttribute("aria-label", tileLabel(record));
       tile.setAttribute("aria-pressed", record.ipAddress === state.selectedIp ? "true" : "false");
@@ -254,16 +259,20 @@
       return;
     }
 
-    const status = statusMeta(record.observedStatus);
+    const shownStatus = displayStatus(record);
+    const status = statusMeta(shownStatus);
+    const isStale =
+      record.observedStatus === "INACTIVE" && shownStatus === "AVAILABLE";
     setText(els.drawerIp, record.ipAddress);
     setText(els.drawerStatus, `${status.glyph} ${status.label}`);
-    els.drawerStatus.dataset.status = record.observedStatus;
+    els.drawerStatus.dataset.status = shownStatus;
     setHidden(els.drawerReserved, !record.isReserved);
     setText(els.drawerMac, record.macAddress ?? "없음");
     setText(els.drawerFirstSeen, formatLocal(record.firstSeenAt));
     setText(els.drawerLastSeen, formatLocal(record.lastSeenAt));
     setText(els.drawerLastChecked, formatLocal(record.lastCheckedAt));
-    setHidden(els.drawerWarning, record.observedStatus !== "AVAILABLE");
+    setHidden(els.drawerStaleNote, !isStale);
+    setHidden(els.drawerWarning, shownStatus !== "AVAILABLE");
     setText(els.toggleReserved, record.isReserved ? "예약 해제" : "예약");
 
     if (!state.noteDirty) {

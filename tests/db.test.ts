@@ -289,7 +289,12 @@ describe("ip record persistence", () => {
     const dashboard = getDashboardSnapshot(db, CIDR);
     const stored = listIpRecords(db, CIDR);
 
-    expect(dashboard.records).toEqual(stored);
+    expect(
+      dashboard.records.map(({ effectiveStatus: _effectiveStatus, ...record }) => record),
+    ).toEqual(stored);
+    expect(
+      dashboard.records.every((record) => record.effectiveStatus === record.observedStatus),
+    ).toBe(true);
     expect(dashboard.summary.total).toBe(6);
     expect(dashboard.summary.active).toBe(2);
     expect(dashboard.summary.available).toBe(4);

@@ -49,6 +49,10 @@ export interface IpRecord {
   lastCheckedAt: string | null;
 }
 
+export interface DashboardRecord extends IpRecord {
+  effectiveStatus: ObservedStatus;
+}
+
 export interface NormalizedHostObservation {
   ipAddress: string;
   responded: boolean;
@@ -153,17 +157,39 @@ export function compareIpv4Addresses(left: string, right: string): number {
   return ipv4AddressToNumber(left) - ipv4AddressToNumber(right);
 }
 
-export function summarizeRecords(records: readonly IpRecord[]): StatusSummary {
+export function effectiveStatus(
+  record: Pick<IpRecord, "observedStatus" | "lastSeenAt">,
+  nowMs: number,
+  thresholdMs: number,
+): ObservedStatus {
+  const lastSeenAt = record.lastSeenAt;
+  const isStale =
+    record.observedStatus === "INACTIVE" &&
+    thresholdMs > 0 &&
+    lastSeenAt !== null &&
+    nowMs - Date.parse(lastSeenAt) > thresholdMs;
+
+  return isStale ? "AVAILABLE" : record.observedStatus;
+}
+
+export function summarizeRecords(
+  records: readonly IpRecord[],
+  nowMs?: number,
+  thresholdMs?: number,
+): StatusSummary {
   let active = 0;
   let inactive = 0;
   let available = 0;
   let reserved = 0;
   let allocationCandidates = 0;
+  const resolvedNowMs = nowMs ?? 0;
+  const resolvedThresholdMs = thresholdMs ?? 0;
 
   for (const record of records) {
-    if (record.observedStatus === "ACTIVE") {
+    const status = effectiveStatus(record, resolvedNowMs, resolvedThresholdMs);
+    if (status === "ACTIVE") {
       active += 1;
-    } else if (record.observedStatus === "INACTIVE") {
+    } else if (status === "INACTIVE") {
       inactive += 1;
     } else {
       available += 1;
@@ -173,7 +199,7 @@ export function summarizeRecords(records: readonly IpRecord[]): StatusSummary {
       reserved += 1;
     }
 
-    if (record.observedStatus === "AVAILABLE" && !record.isReserved) {
+    if (status === "AVAILABLE" && !record.isReserved) {
       allocationCandidates += 1;
     }
   }

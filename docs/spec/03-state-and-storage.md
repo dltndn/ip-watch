@@ -25,6 +25,8 @@ AVAILABLE + RESERVED
 observed_status == AVAILABLE && is_reserved == false
 ```
 
+대시보드 표시와 할당 후보 카운트는 아래 **표시 상태(aging)** 가 켜져 있으면 `effectiveStatus`를 쓴다. 꺼져 있으면 `effectiveStatus == observed_status`이므로 위 정의와 같다.
+
 ## 탐지 상태
 
 | 상태 | 화면 표현 | 판정 조건 |
@@ -50,6 +52,26 @@ ARP/Ping 응답 없음 + 과거 사용 이력 있음
 ARP/Ping 응답 없음 + 과거 사용 이력 없음
     → AVAILABLE
 ```
+
+이 판정 순서와 `observed_status` 저장값은 aging으로 바꾸지 않는다.
+
+## 표시 상태(aging)
+
+오래 응답이 없는 `INACTIVE`를 화면에서 미사용처럼 보이게 하려면 `STALE_THRESHOLD_DAYS`를 설정한다. 미설정 또는 `0`이면 aging은 꺼지고 표시는 `observed_status`와 같다.
+
+표시용 파생 값 `effectiveStatus`는 저장하지 않는다.
+
+```text
+isStale = observed_status == INACTIVE
+        && STALE_THRESHOLD_DAYS > 0
+        && last_seen_at != null
+        && (now - last_seen_at) > STALE_THRESHOLD_DAYS   // 엄격히 초과
+
+effectiveStatus = isStale ? AVAILABLE : observed_status
+대시보드 할당 후보 = effectiveStatus == AVAILABLE && is_reserved == false
+```
+
+stale로 표시된 IP는 드로어에서 "과거 사용 이력"과 `last_seen_at`을 함께 보여 저장 이력을 숨기지 않는다.
 
 ## 값 갱신
 
