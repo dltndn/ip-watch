@@ -122,7 +122,7 @@ IP를 선택하면 다음 정보를 표시한다.
 
 작업자는 상세 영역에서 메모를 변경하고 IP를 예약하거나 예약 해제할 수 있다.
 
-그리드·필터·상태 필드는 표시 상태 `effectiveStatus`를 따른다. stale `INACTIVE`(오래 응답 없음)는 `AVAILABLE`과 같은 회색 ○로 보이며, 드로어에서만 "과거 사용 이력" 문구와 `last_seen_at`으로 구분한다. 판정·저장 규칙은 [03-state-and-storage.md](./03-state-and-storage.md)를 따른다.
+그리드·필터·상태 필드는 표시 상태 `effectiveStatus`를 따른다. stale `INACTIVE`(오래 응답 없음)는 `AVAILABLE`과 같은 회색 ○로 보이며, 드로어에서만 "과거 사용 이력" 문구(임계 일수 `STALE_THRESHOLD_DAYS`를 명시)와 `last_seen_at`으로 구분한다. 판정·저장 규칙은 [03-state-and-storage.md](./03-state-and-storage.md)를 따른다.
 
 ## 참고 자료
 

@@ -71,7 +71,7 @@ effectiveStatus = isStale ? AVAILABLE : observed_status
 대시보드 할당 후보 = effectiveStatus == AVAILABLE && is_reserved == false
 ```
 
-stale로 표시된 IP는 드로어에서 "과거 사용 이력"과 `last_seen_at`을 함께 보여 저장 이력을 숨기지 않는다.
+stale로 표시된 IP는 드로어에서 "과거 사용 이력" 문구와 `last_seen_at`을 함께 보여 저장 이력을 숨기지 않는다. 이 문구에는 임계 일수(`STALE_THRESHOLD_DAYS`)를 명시해 "N일 이상 응답이 없어 미사용으로 표시된다"는 규칙을 그 IP의 드로어 안에서 설명한다.
 
 ## 값 갱신
 
