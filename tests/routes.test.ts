@@ -76,6 +76,17 @@ describe("HTTP routes", () => {
       lastSuccessfulScanAt: FIXED_NOW.toISOString(),
       lastError: null,
     });
+    expect(response.body.staleThresholdDays).toBe(0);
+  });
+
+  it("GET /api/dashboard includes staleThresholdDays when aging is on", async () => {
+    const ctx = assemble(opened, { frames: [okFrame([])], staleThresholdDays: 7 });
+    await ctx.scanLoop.triggerScan();
+
+    const response = await request(ctx.app).get("/api/dashboard");
+
+    expect(response.status).toBe(200);
+    expect(response.body.staleThresholdDays).toBe(7);
   });
 
   it("PATCH /api/ips/:ip updates a note, persists it, and broadcasts once", async () => {

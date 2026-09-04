@@ -40,11 +40,14 @@
     saveNote: document.getElementById("save-note"),
   };
 
+  const staleNoteTemplate = els.drawerStaleNote ? els.drawerStaleNote.textContent : "";
+
   const state = {
     records: [],
     recordsByIp: new Map(),
     summary: null,
     scan: null,
+    staleThresholdDays: 0,
     statusFilter: "all",
     reservationFilter: "all",
     query: "",
@@ -271,6 +274,9 @@
     setText(els.drawerFirstSeen, formatLocal(record.firstSeenAt));
     setText(els.drawerLastSeen, formatLocal(record.lastSeenAt));
     setText(els.drawerLastChecked, formatLocal(record.lastCheckedAt));
+    if (isStale) {
+      els.drawerStaleNote.textContent = staleNoteTemplate.replace("{N}", String(state.staleThresholdDays));
+    }
     setHidden(els.drawerStaleNote, !isStale);
     setHidden(els.drawerWarning, shownStatus !== "AVAILABLE");
     setText(els.toggleReserved, record.isReserved ? "예약 해제" : "예약");
@@ -304,6 +310,7 @@
     state.recordsByIp = new Map(state.records.map((record) => [record.ipAddress, record]));
     state.summary = payload.summary;
     state.scan = payload.scan;
+    state.staleThresholdDays = payload.staleThresholdDays ?? 0;
     state.loaded = true;
     renderAll();
   }

@@ -67,6 +67,7 @@ export function registerRoutes(app: Express, deps: RouteDeps): void {
       records: snapshot.records,
       summary: snapshot.summary,
       scan: deps.scanLoop.getStatus(),
+      staleThresholdDays: deps.config.staleThresholdDays,
     });
   });
 

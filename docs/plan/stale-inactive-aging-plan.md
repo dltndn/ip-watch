@@ -24,7 +24,7 @@
 | 환경변수 | `STALE_THRESHOLD_DAYS` (일 단위) |
 | 기본값 | **OFF** — 미설정/0이면 오늘과 100% 동일 동작 (완전 하위호환) |
 | 표시 통일 | 색만 바꾸지 않고 **`effectiveStatus` 하나로 타일·글리프·드로어·필터·카운트를 모두 통일** |
-| 드로어 정직성 | stale 항목은 미사용 추정으로 표시하되 **"과거 사용 이력" 문구와 `last_seen_at`을 함께 노출** |
+| 드로어 정직성 | stale 항목은 미사용 추정으로 표시하되 **"과거 사용 이력" 문구(임계 일수 명시)와 `last_seen_at`을 함께 노출** |
 
 ## 3. 설계
 
@@ -49,7 +49,7 @@
 
 ### 트레이드오프 (수용)
 
-그리드에서는 "한 번도 안 쓴 IP(AVAILABLE)"와 "오래 죽은 IP(stale INACTIVE)"가 **동일한 회색 ○로 보여 구분되지 않는다.** 구분은 드로어의 `last_seen_at`과 "과거 사용 이력" 문구에만 남는다. 이는 "오래된 IP를 미사용처럼 보이게 한다"는 의도의 결과이며, 그리드는 후보 탐색용·드로어는 이력 확인용이라는 역할 분담과 부합한다.
+그리드에서는 "한 번도 안 쓴 IP(AVAILABLE)"와 "오래 죽은 IP(stale INACTIVE)"가 **동일한 회색 ○로 보여 구분되지 않는다.** 구분은 드로어의 `last_seen_at`과 "과거 사용 이력" 문구(임계 일수 `STALE_THRESHOLD_DAYS` 명시)에만 남는다. 이는 "오래된 IP를 미사용처럼 보이게 한다"는 의도의 결과이며, 그리드는 후보 탐색용·드로어는 이력 확인용이라는 역할 분담과 부합한다.
 
 ## 4. 파일별 작업
 
@@ -60,7 +60,7 @@
 | [src/db.ts:198](../../src/db.ts) `getDashboardSnapshot` / [src/scan-loop.ts:83](../../src/scan-loop.ts) | 읽기 경로와 SSE 푸시 경로에 **동일한** `now` + `config` threshold 전달 (한 헬퍼 공유, 경계 불일치 방지) |
 | [src/routes.ts:40](../../src/routes.ts) | 이미 `deps.config` 보유 — threshold만 통과 |
 | [public/app.js](../../public/app.js) | 표시 계열(`statusMeta`·타일 class·글리프·드로어 pill·상태 필터·`isCandidate`)을 `observedStatus` → `effectiveStatus`로 전환. `observedStatus`는 드로어 이력 문구용으로만 참조 |
-| [views/partials/stats.ejs](../../views/partials/stats.ejs), [views/partials/drawer.ejs](../../views/partials/drawer.ejs) | 카운트·문구 정합. 드로어에 "과거 사용 이력" 표기 추가 |
+| [views/partials/stats.ejs](../../views/partials/stats.ejs), [views/partials/drawer.ejs](../../views/partials/drawer.ejs) | 카운트·문구 정합. 드로어에 "과거 사용 이력" 표기 추가(임계 일수를 문구에 명시) |
 | [03-state-and-storage.md](../spec/03-state-and-storage.md), [04-web-and-realtime.md](../spec/04-web-and-realtime.md), [wireframe-dashboard.md](../design/wireframe-dashboard.md) | `observed_status` 판정은 유지하되 "표시 상태(aging)" 규칙과 후보 카운트 정의([04:99](../spec/04-web-and-realtime.md))를 `effectiveStatus` 기준으로 갱신 |
 
 ## 5. 테스트
@@ -76,3 +76,4 @@
 - `observed_status` 저장값·판정 함수 변경 — 하지 않는다. 이력 보존이 핵심.
 - 상태 변경 이력 테이블, 나이 먹임 배치 작업 — MVP 비목표 유지.
 - 그리드에서 stale와 순수 AVAILABLE의 시각적 구분 — 의도적으로 두지 않는다(§3 트레이드오프).
+- 이 규칙 안내(임계 일수·과거 사용 이력)는 그리드/통계에 넣지 않고 **드로어 문구로 한정**한다. 전역 배너·상단 도움말 등 대안은 기각한다.
