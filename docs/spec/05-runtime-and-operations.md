@@ -16,7 +16,7 @@
 ### 베이스 이미지
 
 - 공식 Node.js LTS Debian 기반 이미지를 사용한다.
-- Node.js 메이저 버전은 `package.json`의 `engines`와 동일하게 고정한다.
+- Node.js 메이저 버전은 `package.json`의 `engines`와 동일하게 고정한다. 보안 릴리스가 나오면 Dockerfile의 `NODE_IMAGE` 패치 버전을 갱신한다.
 - Alpine 이미지는 필수 도구와 native dependency 호환성을 별도로 검증하기 전에는 사용하지 않는다.
 
 ### 빌드 구조
@@ -165,6 +165,7 @@ Docker가 보내는 `SIGTERM`을 받으면 다음 순서로 종료한다.
 - 사용자 입력을 외부 명령 문자열에 연결하지 않는다.
 - EJS에서 작업 메모를 escape하여 표시한다.
 - 메모 길이와 요청 본문 크기를 제한한다.
+- 압축된 요청 본문(`Content-Encoding: gzip`, `br` 등)은 해제하지 않고 415로 거부한다.
 - 오류 응답에 스택 트레이스나 내부 명령 전체를 노출하지 않는다.
 - SQLite volume은 애플리케이션 사용자만 쓸 수 있게 한다.
 

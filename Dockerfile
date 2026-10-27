@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS build-dependencies
+# Node.js 24 security patch (CVE-2026-111497) 이상으로 고정
+ARG NODE_IMAGE=node:24.22.1-bookworm-slim
+
+FROM ${NODE_IMAGE} AS build-dependencies
 WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends build-essential python3 \
@@ -26,7 +29,7 @@ COPY views ./views
 COPY public ./public
 RUN npm run typecheck && npm test
 
-FROM node:24-bookworm-slim AS production-dependencies
+FROM ${NODE_IMAGE} AS production-dependencies
 WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends build-essential python3 \
@@ -34,7 +37,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-FROM node:24-bookworm-slim AS runtime
+FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update \
