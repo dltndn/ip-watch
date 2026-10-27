@@ -41,6 +41,8 @@
 }
 ```
 
+압축된 요청 본문(`Content-Encoding` 지정)은 해제하지 않고 `415`와 `UNSUPPORTED_MEDIA_TYPE` 코드로 거부한다.
+
 ## SSE 인터페이스
 
 ### 연결

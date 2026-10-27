@@ -29,6 +29,7 @@ type ApiErrorCode =
   | "INVALID_INPUT"
   | "NOT_FOUND"
   | "PAYLOAD_TOO_LARGE"
+  | "UNSUPPORTED_MEDIA_TYPE"
   | "INTERNAL";
 
 const NOTE_MAX_LENGTH = 1000;
@@ -245,6 +246,16 @@ const apiErrorHandler: ErrorRequestHandler = (
     return;
   }
 
+  if (isUnsupportedEncodingError(error)) {
+    sendError(
+      response,
+      415,
+      "UNSUPPORTED_MEDIA_TYPE",
+      "Compressed request bodies are not supported.",
+    );
+    return;
+  }
+
   console.error(error);
   sendError(response, 500, "INTERNAL", "An internal error occurred.");
 };
@@ -269,4 +280,12 @@ function isPayloadTooLargeError(error: unknown): boolean {
 
   const candidate = error as { type?: unknown; status?: unknown };
   return candidate.type === "entity.too.large" || candidate.status === 413;
+}
+
+function isUnsupportedEncodingError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  return (error as { type?: unknown }).type === "encoding.unsupported";
 }

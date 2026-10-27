@@ -305,6 +305,18 @@ describe("HTTP routes", () => {
 
     expectError(response, 413, "PAYLOAD_TOO_LARGE");
   });
+
+  it("rejects compressed JSON bodies with 415 instead of an internal error", async () => {
+    const ctx = assemble(opened, { frames: [okFrame([])] });
+
+    const response = await request(ctx.app)
+      .patch(`/api/ips/${TARGET_IP}`)
+      .set("Content-Type", "application/json")
+      .set("Content-Encoding", "br")
+      .send(Buffer.from([0x0b, 0x01, 0x80]));
+
+    expectError(response, 415, "UNSUPPORTED_MEDIA_TYPE");
+  });
 });
 
 function assemble(
@@ -373,7 +385,12 @@ function assemble(
 function expectError(
   response: request.Response,
   status: number,
-  code: "INVALID_INPUT" | "NOT_FOUND" | "PAYLOAD_TOO_LARGE" | "INTERNAL",
+  code:
+    | "INVALID_INPUT"
+    | "NOT_FOUND"
+    | "PAYLOAD_TOO_LARGE"
+    | "UNSUPPORTED_MEDIA_TYPE"
+    | "INTERNAL",
 ): void {
   expect(response.status).toBe(status);
   expect(response.body).toEqual({
